@@ -1,0 +1,35 @@
+{
+  "name": "@pleasync/schema",
+  "version": "0.0.0",
+  "description": "Schema DSL parser, AST, and validator for pleasync",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sasakiyusuke2017015/pleasync.git",
+    "directory": "packages/schema"
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "echo 'no tests yet' && exit 0",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

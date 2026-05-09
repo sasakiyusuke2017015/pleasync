@@ -1,0 +1,38 @@
+{
+  "name": "pleasync",
+  "version": "0.0.0",
+  "description": "CLI for pleasync: generate / plan / apply / introspect",
+  "private": true,
+  "bin": {
+    "pleasync": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sasakiyusuke2017015/pleasync.git",
+    "directory": "packages/cli"
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "echo 'no tests yet' && exit 0",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@pleasync/client": "workspace:*",
+    "@pleasync/orm": "workspace:*",
+    "@pleasync/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
