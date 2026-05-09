@@ -1,13 +1,15 @@
-// pleasync CLI — Phase 2 scaffolding
+// pleasync CLI — Phase 2
 //
-// 実装予定のコマンド:
+// 実装済みコマンド:
 //   pleasync generate              schema → typed client コード生成
-//   pleasync plan                  Pleasanter 現状と schema の差分を表示
-//   pleasync apply                 schema を Pleasanter に適用（site 作成・更新）
-//   pleasync introspect <siteId>   Pleasanter から schema を逆引き
+//
+// Phase 3+ で追加予定:
+//   pleasync plan / apply / introspect
+
+import { runGenerateCommand } from './command-generate.js';
 
 export async function main(argv: readonly string[]): Promise<void> {
-  const [command] = argv;
+  const [command, ...rest] = argv;
 
   if (!command || command === '--help' || command === '-h') {
     printHelp();
@@ -16,33 +18,35 @@ export async function main(argv: readonly string[]): Promise<void> {
 
   switch (command) {
     case 'generate':
+      await runGenerateCommand(rest);
+      return;
     case 'plan':
     case 'apply':
     case 'introspect':
-      console.error(
-        `[pleasync] '${command}' コマンドは Phase 2 で実装予定です（現状未実装）。`,
+      process.stderr.write(
+        `[pleasync] '${command}' is planned for a future phase (not yet implemented).\n`,
       );
       process.exit(2);
-      break;
+      return;
     default:
-      console.error(`[pleasync] unknown command: ${command}`);
+      process.stderr.write(`[pleasync] unknown command: ${command}\n`);
       printHelp();
       process.exit(1);
   }
 }
 
 function printHelp(): void {
-  console.log(`pleasync CLI
+  process.stdout.write(`pleasync CLI
 
 Usage:
   pleasync <command> [options]
 
-Commands (planned):
-  generate          Generate typed client from pleasync.schema.yaml
-  plan              Show diff between Pleasanter and schema
-  apply             Apply schema to Pleasanter (creates/updates sites)
-  introspect <id>   Reverse-engineer schema from existing Pleasanter site
+Commands:
+  generate         Generate typed client from pleasync.schema.yaml
+  plan             (planned) Show diff between Pleasanter and schema
+  apply            (planned) Apply schema to Pleasanter (creates/updates sites)
+  introspect <id>  (planned) Reverse-engineer schema from existing Pleasanter site
 
-Status: 🚧 Phase 2 — all commands are stubs.
+Run \`pleasync generate --help\` for command-specific options.
 `);
 }
