@@ -1,0 +1,74 @@
+# Pleasync schema example
+#
+# このサンプルは Pleasanter の test 環境（http://192.168.10.64）に
+# 既に存在する 35535 (顧客マスタ) と 35536 (案件管理) を対象にしている。
+# 本ファイルから `pleasync generate` で型付きクライアントを生成。
+#
+# 実行:
+#   pnpm --filter pleasync-nextjs-example generate
+
+version: '1'
+
+server:
+  baseUrl: ${PLEASANTER_BASE_URL}
+  apiKey:  ${PLEASANTER_API_KEY}
+  apiVersion: '1.1'
+
+choices:
+  ProgressStatus:
+    - { value: 100, label: '進行中' }
+    - { value: 200, label: '保留' }
+    - { value: 900, label: '完了' }
+
+models:
+  customer:
+    type: Results
+    parentId: 35534
+    siteId: 35535
+    title: 顧客マスタ
+    fields:
+      title:
+        slot: Title
+        label: タイトル
+        type: text
+        required: true
+      body:
+        slot: Body
+        label: 本文
+        type: text
+      status:
+        slot: Status
+        label: 状況
+        type: status
+        choices: ProgressStatus
+        default: 100
+
+  issue:
+    type: Issues
+    parentId: 35534
+    siteId: 35536
+    title: 案件管理
+    fields:
+      title:
+        slot: Title
+        label: タイトル
+        type: text
+        required: true
+      body:
+        slot: Body
+        label: 本文
+        type: text
+      status:
+        slot: Status
+        label: 状況
+        type: status
+        choices: ProgressStatus
+        default: 100
+      startDate:
+        slot: StartTime
+        label: 開始日
+        type: datetime
+      completionDate:
+        slot: CompletionTime
+        label: 完了日
+        type: datetime

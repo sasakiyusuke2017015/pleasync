@@ -17,6 +17,9 @@ importers:
       '@pleasync/client':
         specifier: beta
         version: 0.1.1-beta.2
+      '@pleasync/orm':
+        specifier: workspace:*
+        version: link:../../packages/orm
       next:
         specifier: ^15.0.0
         version: 15.5.18(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -36,6 +39,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.2.3(@types/react@19.2.14)
+      pleasync:
+        specifier: workspace:*
+        version: link:../../packages/cli
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

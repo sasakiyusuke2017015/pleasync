@@ -3,7 +3,7 @@
 // pleasync.schema.yaml をパースして AST に変換し、構造を検証する。
 // 詳細仕様: docs/schema-spec.md
 
-export { parseSchema } from './parser.js';
+export { parseSchema, resolveServerConfig } from './parser.js';
 export { validateSchema } from './validator.js';
 export type {
   SchemaAst,

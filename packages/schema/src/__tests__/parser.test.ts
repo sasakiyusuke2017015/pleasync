@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSchema } from '../parser.js';
+import { parseSchema, resolveServerConfig } from '../parser.js';
 
 describe('parseSchema', () => {
   it('minimum valid schema を AST に変換する', () => {
@@ -137,34 +137,17 @@ models: {}
     expect(ast.server?.apiVersion).toBe('1.1');
   });
 
-  it('${ENV_VAR} を server.* で展開する', () => {
-    const prev = process.env.PLEASANTER_TEST_BASE_URL;
-    process.env.PLEASANTER_TEST_BASE_URL = 'https://from-env.example.com';
-    try {
-      const yaml = `
+  it('${ENV_VAR} はパース時には展開せずリテラルとして残す', () => {
+    const yaml = `
 version: '1'
 server:
   baseUrl: \${PLEASANTER_TEST_BASE_URL}
   apiKey: abc
 models: {}
 `;
-      const ast = parseSchema(yaml);
-      expect(ast.server?.baseUrl).toBe('https://from-env.example.com');
-    } finally {
-      process.env.PLEASANTER_TEST_BASE_URL = prev;
-    }
-  });
-
-  it('未定義 ${ENV_VAR} はエラー', () => {
-    delete process.env.PLEASANTER_NONEXISTENT_42;
-    const yaml = `
-version: '1'
-server:
-  baseUrl: \${PLEASANTER_NONEXISTENT_42}
-  apiKey: abc
-models: {}
-`;
-    expect(() => parseSchema(yaml)).toThrow(/PLEASANTER_NONEXISTENT_42/);
+    const ast = parseSchema(yaml);
+    // env 展開しない（環境変数が未定義でも throw しない）
+    expect(ast.server?.baseUrl).toBe('${PLEASANTER_TEST_BASE_URL}');
   });
 
   it('YAML syntax error は SyntaxError として投げる', () => {
@@ -205,5 +188,54 @@ models:
     const code = ast.models.customer.fields.code;
     expect(code.required).toBe(true);
     expect(code.unique).toBe(true);
+  });
+});
+
+describe('resolveServerConfig', () => {
+  it('${ENV_VAR} を process.env から展開', () => {
+    const prev = process.env.PLEASANTER_TEST_BASE_URL;
+    process.env.PLEASANTER_TEST_BASE_URL = 'https://from-env.example.com';
+    try {
+      const resolved = resolveServerConfig({
+        baseUrl: '${PLEASANTER_TEST_BASE_URL}',
+        apiKey: 'abc',
+      });
+      expect(resolved.baseUrl).toBe('https://from-env.example.com');
+      expect(resolved.apiKey).toBe('abc');
+    } finally {
+      process.env.PLEASANTER_TEST_BASE_URL = prev;
+    }
+  });
+
+  it('未定義 ${ENV_VAR} は throw', () => {
+    delete process.env.PLEASANTER_NONEXISTENT_42;
+    expect(() =>
+      resolveServerConfig({
+        baseUrl: '${PLEASANTER_NONEXISTENT_42}',
+        apiKey: 'abc',
+      }),
+    ).toThrow(/PLEASANTER_NONEXISTENT_42/);
+  });
+
+  it('apiVersion も展開できる', () => {
+    process.env.PLEASANTER_TEST_VER = '2.0';
+    try {
+      const resolved = resolveServerConfig({
+        baseUrl: 'http://x',
+        apiKey: 'abc',
+        apiVersion: '${PLEASANTER_TEST_VER}',
+      });
+      expect(resolved.apiVersion).toBe('2.0');
+    } finally {
+      delete process.env.PLEASANTER_TEST_VER;
+    }
+  });
+
+  it('apiVersion 未指定時は undefined のまま', () => {
+    const resolved = resolveServerConfig({
+      baseUrl: 'http://x',
+      apiKey: 'abc',
+    });
+    expect(resolved.apiVersion).toBeUndefined();
   });
 });
