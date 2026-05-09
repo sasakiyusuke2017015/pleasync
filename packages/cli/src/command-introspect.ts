@@ -4,9 +4,15 @@ import { stringify as stringifyYaml } from 'yaml';
 import { Engine } from '@pleasync/orm';
 import type { SchemaAst } from '@pleasync/schema';
 import { siteToModel, type RawSite } from './introspect.js';
+import { loadSitePackageFile } from './site-package.js';
 
 export interface IntrospectCommandOptions {
+  /** API 経由で 1 件ずつ取得する siteId 群 */
   siteIds: number[];
+  /** SitePackage JSON ファイル（Pleasanter のエクスポート機能で取得） */
+  packagePath?: string;
+  /** Sites 型 (フォルダ) を結果に含める */
+  includeFolders?: boolean;
   out?: string;
   baseUrl?: string;
   apiKey?: string;
@@ -28,19 +34,20 @@ export async function runIntrospect(
   outputPath: string | null;
   modelCount: number;
 }> {
-  if (options.siteIds.length === 0) {
-    throw new Error('introspect requires at least one siteId');
-  }
+  // 入力 sites の取得元を決定: --package 指定 or siteIds 経由
+  const sites: RawSite[] = await collectSites(options);
 
-  const fetchSite = options.fetchSite ?? (await defaultFetcher(options));
+  if (sites.length === 0) {
+    throw new Error(
+      'no sites to introspect (provide siteIds or --package <path>)',
+    );
+  }
 
   const ast: SchemaAst = { version: '1', models: {} };
   const usedNames = new Set<string>();
 
-  for (const siteId of options.siteIds) {
-    const raw = await fetchSite(siteId);
+  for (const raw of sites) {
     const { name, model } = siteToModel(raw);
-
     let unique = name;
     let i = 2;
     while (usedNames.has(unique)) {
@@ -60,10 +67,39 @@ export async function runIntrospect(
       : resolve(cwd, options.out);
     await mkdir(dirname(outPath), { recursive: true });
     await writeFile(outPath, yaml, 'utf-8');
-    return { yaml, outputPath: outPath, modelCount: options.siteIds.length };
+    return { yaml, outputPath: outPath, modelCount: sites.length };
   }
 
-  return { yaml, outputPath: null, modelCount: options.siteIds.length };
+  return { yaml, outputPath: null, modelCount: sites.length };
+}
+
+async function collectSites(
+  options: IntrospectCommandOptions,
+): Promise<RawSite[]> {
+  if (options.packagePath !== undefined && options.siteIds.length > 0) {
+    throw new Error('cannot use --package together with siteIds');
+  }
+
+  if (options.packagePath !== undefined) {
+    const cwd = options.cwd ?? process.cwd();
+    const path = isAbsolute(options.packagePath)
+      ? options.packagePath
+      : resolve(cwd, options.packagePath);
+    return loadSitePackageFile(path, {
+      includeFolders: options.includeFolders ?? false,
+    });
+  }
+
+  if (options.siteIds.length === 0) {
+    return [];
+  }
+
+  const fetchSite = options.fetchSite ?? (await defaultFetcher(options));
+  const sites: RawSite[] = [];
+  for (const siteId of options.siteIds) {
+    sites.push(await fetchSite(siteId));
+  }
+  return sites;
 }
 
 async function defaultFetcher(
@@ -117,18 +153,22 @@ export async function runIntrospectCommand(argv: readonly string[]): Promise<voi
     process.stdout.write(`pleasync introspect
 
 Usage:
-  pleasync introspect <siteId> [<siteId>...] [options]
+  pleasync introspect <siteId> [<siteId>...] [options]   # via API
+  pleasync introspect --package <path> [options]         # from SitePackage JSON
 
 Options:
-  --out <path>       Write YAML to file (default: stdout)
-  --base-url <url>   Pleasanter base URL (or PLEASANTER_BASE_URL env)
-  --api-key <key>    API key (or PLEASANTER_API_KEY env)
-  --api-version <v>  API version (default: 1.1)
-  -h, --help         Show this help
+  --package <path>    Pleasanter SitePackage JSON file (parent + all children)
+  --include-folders   When using --package, include Sites-type entries (folders)
+  --out <path>        Write YAML to file (default: stdout)
+  --base-url <url>    Pleasanter base URL (or PLEASANTER_BASE_URL env)
+  --api-key <key>     API key (or PLEASANTER_API_KEY env)
+  --api-version <v>   API version (default: 1.1)
+  -h, --help          Show this help
 
 Examples:
   pleasync introspect 35535
   pleasync introspect 35535 35536 --out pleasync.schema.yaml
+  pleasync introspect --package ./pleasanter-export.json --out schema.yaml
 `);
     return;
   }
@@ -156,6 +196,10 @@ function parseArgs(
       opts.help = true;
     } else if (a === '--out') {
       opts.out = argv[++i];
+    } else if (a === '--package') {
+      opts.packagePath = argv[++i];
+    } else if (a === '--include-folders') {
+      opts.includeFolders = true;
     } else if (a === '--base-url') {
       opts.baseUrl = argv[++i];
     } else if (a === '--api-key') {

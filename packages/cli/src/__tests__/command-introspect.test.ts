@@ -91,10 +91,78 @@ describe('runIntrospect', () => {
     expect(content).toContain('customer:');
   });
 
-  it('siteId が空 → throw', async () => {
+  it('siteId も --package も無い → throw', async () => {
     await expect(
       runIntrospect({ siteIds: [], fetchSite: fetcher }),
-    ).rejects.toThrow(/at least one siteId/);
+    ).rejects.toThrow(/no sites to introspect/);
+  });
+
+  describe('--package 経路', () => {
+    let workDir: string;
+
+    beforeEach(async () => {
+      const { mkdtemp } = await import('node:fs/promises');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      workDir = await mkdtemp(join(tmpdir(), 'pleasync-introspect-pkg-'));
+    });
+
+    it('SitePackage JSON から複数 model を生成', async () => {
+      const { writeFile } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+
+      const pkg = {
+        Sites: [
+          {
+            SiteId: 100,
+            Title: 'Root',
+            ReferenceType: 'Sites',
+            ParentId: 0,
+            SiteSettings: {},
+          },
+          {
+            SiteId: 101,
+            Title: 'Customer',
+            ReferenceType: 'Results',
+            ParentId: 100,
+            SiteSettings: {
+              Columns: [{ ColumnName: 'ClassA', LabelText: 'コード' }],
+            },
+          },
+          {
+            SiteId: 102,
+            Title: 'Issue',
+            ReferenceType: 'Issues',
+            ParentId: 100,
+            SiteSettings: {
+              Columns: [{ ColumnName: 'StartTime', LabelText: '開始' }],
+            },
+          },
+        ],
+      };
+      const pkgPath = join(workDir, 'pkg.json');
+      await writeFile(pkgPath, JSON.stringify(pkg));
+
+      const result = await runIntrospect({
+        siteIds: [],
+        packagePath: pkgPath,
+      });
+
+      expect(result.modelCount).toBe(2);
+      expect(result.yaml).toContain('customer:');
+      expect(result.yaml).toContain('issue:');
+      expect(result.yaml).not.toContain('root:'); // フォルダは除外
+    });
+
+    it('--package と siteIds 同時指定 → throw', async () => {
+      await expect(
+        runIntrospect({
+          siteIds: [35535],
+          packagePath: '/some/file.json',
+          fetchSite: fetcher,
+        }),
+      ).rejects.toThrow(/cannot use --package together with siteIds/);
+    });
   });
 
   it('Status の choices が YAML に出力される', async () => {

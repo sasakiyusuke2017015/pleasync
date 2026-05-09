@@ -93,9 +93,11 @@ const list = await client.customer.findMany({
 
 トップレベル: `PleasyncClient` クラスに各 model の collection が `readonly` で生える。
 
-### `pleasync introspect <siteId>...`
+### `pleasync introspect`
 
 既存 Pleasanter サイトから schema YAML を逆生成（Phase 4）。
+
+**経路 1: API 経由（個別 siteId 指定）**
 
 ```bash
 # 1 site → stdout
@@ -110,6 +112,20 @@ pleasync introspect 35535 \
   --api-key abc... \
   --api-version 1.1
 ```
+
+**経路 2: SitePackage JSON 一括取り込み（Phase 4 拡張）**
+
+Pleasanter UI の「サイトパッケージのエクスポート」で取得した JSON を渡せば、親サイト + 配下の全サイトを一気に schema 化できる。
+
+```bash
+# 親フォルダ + 配下全部を取り込む
+pleasync introspect --package ./pleasanter-export.json --out schema.yaml
+
+# Sites 型 (フォルダ) も schema に含める（デフォルトは除外）
+pleasync introspect --package ./pleasanter-export.json --include-folders
+```
+
+API 接続不要。ローカルファイルから完結する。
 
 **マッピング**:
 
@@ -209,10 +225,11 @@ pnpm --filter pleasync test
 | `generate.test.ts` | 14 |
 | `command-generate.test.ts` | 6 |
 | `introspect.test.ts` | 21 |
-| `command-introspect.test.ts` | 7 |
+| `command-introspect.test.ts` | 9 |
 | `diff.test.ts` | 12 |
 | `command-plan.test.ts` | 6 |
 | `command-apply.test.ts` | 8 |
+| `site-package.test.ts` | 9 |
 
 ## ライセンス
 
