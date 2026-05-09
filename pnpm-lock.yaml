@@ -30,6 +30,9 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
+      '@pleasync/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.18
@@ -39,9 +42,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.2.3(@types/react@19.2.14)
-      pleasync:
-        specifier: workspace:*
-        version: link:../../packages/cli
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

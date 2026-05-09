@@ -1,6 +1,6 @@
 {
-  "name": "pleasync",
-  "version": "0.1.0-beta.1",
+  "name": "@pleasync/cli",
+  "version": "0.1.0-beta.2",
   "description": "CLI for pleasync: generate / plan / apply / introspect",
   "bin": {
     "pleasync": "./dist/bin.js"

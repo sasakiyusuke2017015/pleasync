@@ -56,7 +56,7 @@ jobs:
         run: |
           pnpm --filter @pleasync/schema build
           pnpm --filter @pleasync/orm build
-          pnpm --filter pleasync build
+          pnpm --filter @pleasync/cli build
 
       - name: Publish @pleasync/schema
         env:
@@ -71,7 +71,7 @@ jobs:
       - name: Publish pleasync (CLI)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm --filter pleasync publish --access public --tag ${{ steps.dist-tag.outputs.tag }} --no-git-checks
+        run: pnpm --filter @pleasync/cli publish --access public --tag ${{ steps.dist-tag.outputs.tag }} --no-git-checks
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -1,17 +1,20 @@
-# pleasync (CLI)
+# @pleasync/cli
 
-Pleasync の CLI ツール。`generate` を提供する（`plan`/`apply`/`introspect` は Phase 3+）。
+Pleasync の CLI ツール。bin 名は `pleasync` (短い)。`generate` / `plan` / `apply` / `introspect` を提供。
 
 ## ステータス
 
 ✅ **Phase 2 (`generate`) 完了** — schema → typed client コード生成 (17 tests passing)
 
-## インストール（将来 npm 公開後）
+## インストール
 
 ```bash
-npm install -D pleasync @pleasync/orm
+npm install -D @pleasync/cli @pleasync/schema
+npm install @pleasync/orm @pleasync/client
 npx pleasync generate
 ```
+
+bin 名は `pleasync` のまま (短いほうが叩きやすいので)。
 
 ## コマンド
 
