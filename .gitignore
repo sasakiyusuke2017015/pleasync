@@ -43,6 +43,7 @@ Cargo.lock.bak
 
 # Claude / tooling
 .claude/projects/
+.claude/settings.local.json
 
 # === Migration-time exclusions ===
 # 既存の sibling directory が新 repo に取り込まれないようにする

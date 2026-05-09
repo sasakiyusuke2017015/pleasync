@@ -1,0 +1,24 @@
+{
+  "name": "pleasync",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Pleasanter 多環境構成管理ツール群（@pleasync/* monorepo）",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sasakiyusuke2017015/pleasync.git"
+  },
+  "engines": {
+    "node": ">= 18",
+    "pnpm": ">= 9"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
