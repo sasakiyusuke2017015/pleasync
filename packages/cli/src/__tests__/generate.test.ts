@@ -28,13 +28,75 @@ models:
 `);
 
     expect(code).toContain("import { Engine, ModelCollection } from '@pleasync/orm'");
+    expect(code).toContain('WhereOperator');
+    expect(code).toContain('OrderByDirection');
     expect(code).toContain('export interface CustomerRecord');
     expect(code).toContain('export interface CustomerCreateInput');
     expect(code).toContain('export interface CustomerUpdateInput');
     expect(code).toContain('export interface CustomerWhere');
+    expect(code).toContain('export interface CustomerOrderBy');
     expect(code).toContain('class CustomerCollection extends ModelCollection<');
     expect(code).toContain('export class PleasyncClient');
     expect(code).toContain('readonly customer: CustomerCollection');
+  });
+
+  it('Where field は WhereOperator<T> でラップされる', () => {
+    const code = generate(`
+version: '1'
+models:
+  customer:
+    type: Results
+    parentId: 1
+    siteId: 100
+    title: 顧客
+    fields:
+      code: { slot: ClassA, label: c, type: text }
+      status:
+        slot: Status
+        label: s
+        type: status
+        choices: [{ value: 100, label: A }, { value: 900, label: B }]
+`);
+
+    expect(code).toMatch(/code\?: WhereOperator<string>;/);
+    expect(code).toMatch(/status\?: WhereOperator<100 \| 900>;/);
+    expect(code).toMatch(/id\?: WhereOperator<number>;/);
+  });
+
+  it('OrderBy 型は全 field + id を OrderByDirection で持つ', () => {
+    const code = generate(`
+version: '1'
+models:
+  m:
+    type: Results
+    parentId: 1
+    siteId: 100
+    title: M
+    fields:
+      a: { slot: ClassA, label: a, type: text }
+      b: { slot: ClassB, label: b, type: text }
+`);
+
+    const block = code.match(/export interface MOrderBy \{[\s\S]*?\}/)![0];
+    expect(block).toMatch(/id\?: OrderByDirection;/);
+    expect(block).toMatch(/a\?: OrderByDirection;/);
+    expect(block).toMatch(/b\?: OrderByDirection;/);
+  });
+
+  it('Collection は 5 番目の型パラメータに OrderBy を渡す', () => {
+    const code = generate(`
+version: '1'
+models:
+  customer:
+    type: Results
+    parentId: 1
+    siteId: 100
+    title: 顧客
+    fields:
+      code: { slot: ClassA, label: c, type: text }
+`);
+
+    expect(code).toMatch(/CustomerWhere,\s+CustomerOrderBy/);
   });
 
   it('field type ごとに正しい TS 型を生成', () => {

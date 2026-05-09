@@ -14,4 +14,6 @@ export type {
   ReferenceType,
   IdWhere,
   FindManyArgs,
+  WhereOperator,
+  OrderByDirection,
 } from './types.js';

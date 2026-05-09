@@ -59,9 +59,28 @@ export interface IdWhere {
   id: number;
 }
 
+/**
+ * where 句の値部分。リテラル値（equals 略記）か演算子オブジェクト。
+ *
+ * 例:
+ *   `{ status: 100 }`            → status equals 100
+ *   `{ status: { equals: 100 } }` → 同上
+ *   `{ status: { in: [100, 200] } }` → status IN (100, 200)
+ */
+export type WhereOperator<T> =
+  | T
+  | {
+      equals?: T;
+      in?: readonly T[];
+    };
+
+/** orderBy の方向 */
+export type OrderByDirection = 'asc' | 'desc';
+
 /** findMany 引数 */
-export interface FindManyArgs<TWhere> {
+export interface FindManyArgs<TWhere, TOrderBy = Record<string, OrderByDirection>> {
   where?: TWhere;
+  orderBy?: TOrderBy;
   take?: number;
   skip?: number;
 }

@@ -1,6 +1,10 @@
 import { Engine } from './engine.js';
 import { fromApiRecord, toApiPayload } from './transform.js';
-import type { FindManyArgs, ModelDef } from './types.js';
+import type {
+  FindManyArgs,
+  ModelDef,
+  OrderByDirection,
+} from './types.js';
 
 /**
  * 1 model に対する CRUD を提供する基底クラス。
@@ -18,6 +22,7 @@ export abstract class ModelCollection<
   TCreate extends Record<string, unknown>,
   TUpdate extends Record<string, unknown>,
   TWhere,
+  TOrderBy = Record<string, OrderByDirection>,
 > {
   protected abstract readonly modelDef: ModelDef;
 
@@ -46,12 +51,21 @@ export abstract class ModelCollection<
    * 高度な演算子は後続フェーズで `getRecordsWithOptions` の ColumnFilterHash に
    * マップする実装に拡張予定。
    */
-  async findMany(args?: FindManyArgs<TWhere>): Promise<TRecord[]> {
+  async findMany(args?: FindManyArgs<TWhere, TOrderBy>): Promise<TRecord[]> {
     let raw: unknown[];
 
-    if (args?.where || args?.take !== undefined || args?.skip !== undefined) {
+    const hasOptions =
+      args !== undefined &&
+      (args.where !== undefined ||
+        args.orderBy !== undefined ||
+        args.take !== undefined ||
+        args.skip !== undefined);
+
+    if (hasOptions) {
       const options = this.buildGetOptions(args);
-      raw = await this.engine.api_().getRecordsWithOptions(this.modelDef.siteId, options);
+      raw = await this.engine
+        .api_()
+        .getRecordsWithOptions(this.modelDef.siteId, options);
     } else {
       raw = await this.engine.api_().getRecords(this.modelDef.siteId);
     }
@@ -88,11 +102,17 @@ export abstract class ModelCollection<
   /**
    * findMany の args から Pleasanter `getRecordsWithOptions` 用 options を組み立てる。
    *
-   * MVP: where の各 key について equals のみサポート。
-   * 例: `where: { code: 'C-001', status: 100 }`
-   *   → `ColumnFilterHash: { ClassA: '["C-001"]', Status: '[100]' }`
+   * - where 句:
+   *   - リテラル値: `{ status: 100 }` → equals 100
+   *   - `{ equals: T }`: 同上
+   *   - `{ in: [T] }`: IN 句
+   *   - 複数の operator 同時指定はエラー
+   * - orderBy: `{ field: 'asc' | 'desc' }` を ColumnSorterHash にマップ
+   * - take/skip: PageSize/Offset
    */
-  protected buildGetOptions(args: FindManyArgs<TWhere>): Record<string, unknown> {
+  protected buildGetOptions(
+    args: FindManyArgs<TWhere, TOrderBy>,
+  ): Record<string, unknown> {
     const options: Record<string, unknown> = {};
 
     if (args.take !== undefined) {
@@ -103,24 +123,99 @@ export abstract class ModelCollection<
     }
 
     if (args.where && typeof args.where === 'object') {
-      const filterHash: Record<string, string> = {};
-      for (const [logical, value] of Object.entries(
+      const filterHash = this.buildFilterHash(
         args.where as Record<string, unknown>,
-      )) {
-        const fieldDef = this.modelDef.fieldMap[logical];
-        if (!fieldDef) {
-          throw new Error(`unknown field in where: '${logical}'`);
-        }
-        // MVP: equals only。他の演算子は今後拡張
-        filterHash[fieldDef.slot] = JSON.stringify([value]);
-      }
+      );
       if (Object.keys(filterHash).length > 0) {
         options.ColumnFilterHash = filterHash;
       }
     }
 
+    if (args.orderBy && typeof args.orderBy === 'object') {
+      const sorterHash = this.buildSorterHash(
+        args.orderBy as Record<string, OrderByDirection>,
+      );
+      if (Object.keys(sorterHash).length > 0) {
+        options.ColumnSorterHash = sorterHash;
+      }
+    }
+
     return options;
   }
+
+  private buildFilterHash(
+    where: Record<string, unknown>,
+  ): Record<string, string> {
+    const filterHash: Record<string, string> = {};
+    for (const [logical, raw] of Object.entries(where)) {
+      const fieldDef = this.modelDef.fieldMap[logical];
+      if (!fieldDef) {
+        throw new Error(`unknown field in where: '${logical}'`);
+      }
+      filterHash[fieldDef.slot] = encodeWhereValue(raw, logical);
+    }
+    return filterHash;
+  }
+
+  private buildSorterHash(
+    orderBy: Record<string, OrderByDirection>,
+  ): Record<string, OrderByDirection> {
+    const sorterHash: Record<string, OrderByDirection> = {};
+    for (const [logical, direction] of Object.entries(orderBy)) {
+      const fieldDef = this.modelDef.fieldMap[logical];
+      if (!fieldDef) {
+        throw new Error(`unknown field in orderBy: '${logical}'`);
+      }
+      if (direction !== 'asc' && direction !== 'desc') {
+        throw new Error(
+          `invalid orderBy direction for '${logical}': must be 'asc' or 'desc'`,
+        );
+      }
+      sorterHash[fieldDef.slot] = direction;
+    }
+    return sorterHash;
+  }
+}
+
+function encodeWhereValue(value: unknown, fieldName: string): string {
+  // リテラル primitive → equals 1 件
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return JSON.stringify([value]);
+  }
+
+  if (typeof value !== 'object') {
+    throw new Error(`invalid where value for '${fieldName}': ${typeof value}`);
+  }
+
+  const op = value as { equals?: unknown; in?: readonly unknown[] };
+  const hasEquals = 'equals' in op && op.equals !== undefined;
+  const hasIn = 'in' in op && op.in !== undefined;
+
+  if (hasEquals && hasIn) {
+    throw new Error(
+      `where '${fieldName}' has both 'equals' and 'in' (specify only one)`,
+    );
+  }
+
+  if (hasEquals) {
+    return JSON.stringify([op.equals]);
+  }
+
+  if (hasIn) {
+    if (!Array.isArray(op.in)) {
+      throw new Error(`where '${fieldName}.in' must be an array`);
+    }
+    return JSON.stringify(op.in);
+  }
+
+  throw new Error(
+    `where '${fieldName}' has no recognized operator (equals/in)`,
+  );
 }
 
 function isNotFoundError(err: unknown): boolean {
