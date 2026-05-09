@@ -7,6 +7,7 @@
 //   pleasync plan / apply / introspect
 
 import { runGenerateCommand } from './command-generate.js';
+import { runIntrospectCommand } from './command-introspect.js';
 
 export async function main(argv: readonly string[]): Promise<void> {
   const [command, ...rest] = argv;
@@ -20,9 +21,11 @@ export async function main(argv: readonly string[]): Promise<void> {
     case 'generate':
       await runGenerateCommand(rest);
       return;
+    case 'introspect':
+      await runIntrospectCommand(rest);
+      return;
     case 'plan':
     case 'apply':
-    case 'introspect':
       process.stderr.write(
         `[pleasync] '${command}' is planned for a future phase (not yet implemented).\n`,
       );
@@ -42,11 +45,11 @@ Usage:
   pleasync <command> [options]
 
 Commands:
-  generate         Generate typed client from pleasync.schema.yaml
-  plan             (planned) Show diff between Pleasanter and schema
-  apply            (planned) Apply schema to Pleasanter (creates/updates sites)
-  introspect <id>  (planned) Reverse-engineer schema from existing Pleasanter site
+  generate            Generate typed client from pleasync.schema.yaml
+  introspect <id>...  Reverse-engineer schema from existing Pleasanter site(s)
+  plan                (planned) Show diff between Pleasanter and schema
+  apply               (planned) Apply schema to Pleasanter (creates/updates sites)
 
-Run \`pleasync generate --help\` for command-specific options.
+Run \`pleasync <command> --help\` for command-specific options.
 `);
 }

@@ -57,6 +57,9 @@ importers:
       '@pleasync/schema':
         specifier: workspace:*
         version: link:../schema
+      yaml:
+        specifier: ^2.6.0
+        version: 2.8.4
     devDependencies:
       '@types/node':
         specifier: ^22.0.0

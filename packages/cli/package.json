@@ -30,7 +30,8 @@
   "dependencies": {
     "@pleasync/client": "workspace:*",
     "@pleasync/orm": "workspace:*",
-    "@pleasync/schema": "workspace:*"
+    "@pleasync/schema": "workspace:*",
+    "yaml": "^2.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
