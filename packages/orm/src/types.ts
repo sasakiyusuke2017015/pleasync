@@ -4,6 +4,7 @@
  * @pleasync/client の `PleasanterClient` がこの形を満たす。テストでは fake を注入可能。
  */
 export interface PleasanterApi {
+  getSite(siteId: number): Promise<unknown>;
   getRecord(recordId: number, options?: unknown): Promise<unknown>;
   getRecords(siteId: number): Promise<unknown[]>;
   getRecordsWithOptions(siteId: number, options?: unknown): Promise<unknown[]>;

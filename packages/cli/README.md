@@ -93,10 +93,44 @@ const list = await client.customer.findMany({
 
 トップレベル: `PleasyncClient` クラスに各 model の collection が `readonly` で生える。
 
+### `pleasync introspect <siteId>...`
+
+既存 Pleasanter サイトから schema YAML を逆生成（Phase 4）。
+
+```bash
+# 1 site → stdout
+pleasync introspect 35535
+
+# 複数 site → ファイル書き出し
+pleasync introspect 35535 35536 --out pleasync.schema.yaml
+
+# 接続情報を引数で渡す（環境変数も可）
+pleasync introspect 35535 \
+  --base-url http://192.168.10.64 \
+  --api-key abc... \
+  --api-version 1.1
+```
+
+**マッピング**:
+
+| Pleasanter ColumnName | logical type | 備考 |
+|---|---|---|
+| `Title` / `Body` / `Manager` / `Owner` | `text` | |
+| `Class*` | `class` (with choices) または `text` | ChoicesText の有無で分岐 |
+| `Num*` | `number` | |
+| `Date*` / `StartTime` / `CompletionTime` | `datetime` | |
+| `Description*` | `description` | |
+| `Check*` | `check` | |
+| `Status` | `status` | ChoicesText を choices にパース |
+| `IssueId` / `ResultId` / `Comments` / `Creator` / `Updator` / `Ver` 等 | (skip) | id は schema で抽象化、システム列は管理しない |
+
+**制約**:
+- `relation` は推定できないため出力しない（手動編集してください）
+- 日本語タイトルは識別子に変換できないため `site<id>` にフォールバック
+
 ## 後続フェーズ
 
 - **Phase 3**: `pleasync plan` / `pleasync apply` （schema を Pleasanter に反映）
-- **Phase 4**: `pleasync introspect <siteId>` （既存 Pleasanter から schema 逆生成）
 
 ## テスト
 
@@ -104,7 +138,7 @@ const list = await client.customer.findMany({
 pnpm --filter pleasync test
 ```
 
-17 tests passing (codegen 11 + command-generate 6)。
+45 tests passing (codegen 11 + command-generate 6 + introspect 21 + command-introspect 7)。
 
 ## ライセンス
 
