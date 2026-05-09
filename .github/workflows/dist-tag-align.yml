@@ -1,0 +1,59 @@
+name: Align dist-tags
+
+# 手動 trigger 専用。NPM_TOKEN を使って `latest` dist-tag を任意の version に書き換える。
+#
+# 用途:
+#   bundle release で `--tag beta` で publish した場合、初回 publish 版が
+#   暗黙的に `latest` になる。新版を `latest` にも反映させたいときに使う。
+#
+# 例:
+#   workflow_dispatch から
+#     package: @pleasync/schema
+#     version: 0.1.0-beta.2
+#     tag: latest
+#   で実行 → latest が 0.1.0-beta.2 を指すようになる。
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package name (e.g. @pleasync/schema)
+        required: true
+        type: string
+      version:
+        description: Version to point at (e.g. 0.1.0-beta.2)
+        required: true
+        type: string
+      tag:
+        description: dist-tag name (default latest)
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
+      - name: Show current dist-tags
+        run: npm dist-tag ls "${{ inputs.package }}"
+
+      - name: Align dist-tag
+        run: npm dist-tag add "${{ inputs.package }}@${{ inputs.version }}" "${{ inputs.tag }}"
+
+      - name: Show updated dist-tags
+        run: npm dist-tag ls "${{ inputs.package }}"
