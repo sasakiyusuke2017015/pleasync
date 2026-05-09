@@ -1,0 +1,58 @@
+name: CI - TypeScript packages
+
+# packages/schema, packages/orm, packages/cli (TypeScript-only) 向けの CI。
+# packages/client は別 workflow (.github/workflows/CI.yml) で napi-rs ビルドを回す。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/schema/**'
+      - 'packages/orm/**'
+      - 'packages/cli/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci-ts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/schema/**'
+      - 'packages/orm/**'
+      - 'packages/cli/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci-ts.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - '@pleasync/schema'
+          - '@pleasync/orm'
+          - pleasync
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter ${{ matrix.package }} build
+
+      - name: Test
+        run: pnpm --filter ${{ matrix.package }} test
