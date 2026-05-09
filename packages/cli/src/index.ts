@@ -8,6 +8,7 @@
 
 import { runGenerateCommand } from './command-generate.js';
 import { runIntrospectCommand } from './command-introspect.js';
+import { runPlanCommand } from './command-plan.js';
 
 export async function main(argv: readonly string[]): Promise<void> {
   const [command, ...rest] = argv;
@@ -25,9 +26,11 @@ export async function main(argv: readonly string[]): Promise<void> {
       await runIntrospectCommand(rest);
       return;
     case 'plan':
+      await runPlanCommand(rest);
+      return;
     case 'apply':
       process.stderr.write(
-        `[pleasync] '${command}' is planned for a future phase (not yet implemented).\n`,
+        `[pleasync] 'apply' is planned for Phase 3.2 (not yet implemented).\n`,
       );
       process.exit(2);
       return;
@@ -47,7 +50,7 @@ Usage:
 Commands:
   generate            Generate typed client from pleasync.schema.yaml
   introspect <id>...  Reverse-engineer schema from existing Pleasanter site(s)
-  plan                (planned) Show diff between Pleasanter and schema
+  plan                Show diff between Pleasanter and schema (read-only)
   apply               (planned) Apply schema to Pleasanter (creates/updates sites)
 
 Run \`pleasync <command> --help\` for command-specific options.
