@@ -1,17 +1,30 @@
-name: Release
+name: CI - @pleasync/client
 
+# packages/client の Multi-platform build matrix for napi-rs
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+      - '.github/workflows/CI.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/client/**'
+      - '.github/workflows/CI.yml'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
 
-permissions:
-  contents: write
-  id-token: write
+defaults:
+  run:
+    working-directory: packages/client
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -49,7 +62,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -62,15 +74,17 @@ jobs:
         with:
           version: 0.13.0
 
-      - name: Cache cargo
+      - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target
-          key: ${{ matrix.target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+            packages/client/target
+          key: ${{ matrix.target }}-cargo-${{ hashFiles('packages/client/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.target }}-cargo-
 
       - name: Install dependencies
         run: npm install --ignore-scripts
@@ -83,60 +97,38 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.target }}
-          path: '*.node'
+          path: packages/client/*.node
           if-no-files-found: error
           retention-days: 7
 
-  publish:
-    name: Publish to npm
+  rust-tests:
+    name: Rust unit tests
     runs-on: ubuntu-latest
-    needs: build
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            packages/client/target
+          key: rust-tests-cargo-${{ hashFiles('packages/client/Cargo.lock') }}
 
-      - name: Install dependencies
-        run: npm install --ignore-scripts
+      - name: Run cargo test
+        working-directory: packages/client
+        run: cargo test --all-features
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Run cargo clippy
+        working-directory: packages/client
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Move artifacts into npm dirs
-        run: npx napi artifacts --dir artifacts
-
-      - name: List npm dirs
-        run: ls -lR npm
-
-      - name: Determine dist-tag
-        id: dist-tag
-        run: |
-          REF="${GITHUB_REF#refs/tags/}"
-          if [[ "$REF" =~ -(beta|alpha|rc)\.[0-9]+$ ]]; then
-            echo "tag=beta" >> "$GITHUB_OUTPUT"
-            echo "Detected pre-release tag: $REF -> dist-tag=beta"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-            echo "Detected stable tag: $REF -> dist-tag=latest"
-          fi
-
-      # npm publish が package.json の prepublishOnly フック経由で
-      # napi prepublish -t npm を呼ぶ。これが platform sub-packages の
-      # publish と main package の publish の両方をハンドルする。
-      # 手動ループは不要（同じことを二重に実行して 403 になる）。
-      - name: Publish (main + platform packages via prepublishOnly)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --tag ${{ steps.dist-tag.outputs.tag }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          prerelease: ${{ steps.dist-tag.outputs.tag == 'beta' }}
+      # cargo fmt --check は別 PR で整備予定（既存コードベースが未整形のため一旦除外）。
+      # 整備後に下記をコメント解除する:
+      # - name: Check formatting
+      #   working-directory: packages/client
+      #   run: cargo fmt --all -- --check
