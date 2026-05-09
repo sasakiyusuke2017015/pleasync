@@ -51,8 +51,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm --filter ${{ matrix.package }} build
+      # 対象パッケージとその全 workspace 依存をトポロジカル順にビルド。
+      # `...<pkg>` 構文で「<pkg> とその上流依存」を選択。
+      - name: Build (with workspace dependencies)
+        run: pnpm --filter "...${{ matrix.package }}" --filter "!@pleasync/client" build
 
       - name: Test
         run: pnpm --filter ${{ matrix.package }} test
