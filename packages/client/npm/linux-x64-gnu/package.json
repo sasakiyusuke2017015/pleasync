@@ -1,0 +1,22 @@
+{
+  "name": "@pleasync/client-linux-x64-gnu",
+  "version": "0.1.1-beta.2",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "libc": ["glibc"],
+  "main": "client.linux-x64-gnu.node",
+  "files": ["client.linux-x64-gnu.node"],
+  "description": "Pleasanter API client (napi-rs) - Linux x64 (glibc)",
+  "license": "MIT",
+  "engines": {
+    "node": ">= 18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sasakiyusuke2017015/pleasync-client.git"
+  }
+}

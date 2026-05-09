@@ -1,0 +1,16 @@
+target/
+node_modules/
+src/
+build.rs
+Cargo.toml
+Cargo.lock
+.gitignore
+.github/
+.vscode/
+.idea/
+examples/
+npm/
+*.tgz
+*.log
+.env
+.env.*
