@@ -1,12 +1,19 @@
-// @pleasync/schema — Phase 1 scaffolding
+// @pleasync/schema — Phase 1
 //
-// このパッケージは pleasync.schema.yaml をパースして AST にする責務を持つ。
-// 公開予定の API:
-//
-//   parseSchema(yaml: string): SchemaAst
-//   validateSchema(ast: SchemaAst): ValidationResult
-//
-// 詳細仕様は docs/schema-spec.md（未作成）で議論する。
+// pleasync.schema.yaml をパースして AST に変換し、構造を検証する。
+// 詳細仕様: docs/schema-spec.md
 
-export const PACKAGE_NAME = '@pleasync/schema';
-export const VERSION = '0.0.0';
+export { parseSchema } from './parser.js';
+export { validateSchema } from './validator.js';
+export type {
+  SchemaAst,
+  ServerConfig,
+  Choice,
+  Model,
+  Field,
+  FieldType,
+  ReferenceType,
+  ValidationResult,
+  ValidationError,
+  ValidationErrorCode,
+} from './ast.js';
