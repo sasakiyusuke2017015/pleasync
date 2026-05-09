@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+target/
+*.tsbuildinfo
+.next/
+
+# Native binaries (built per-platform via CI)
+*.node
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+
+# Tests / coverage
+coverage/
+
+# pnpm / yarn
+.pnpm-debug.log
+
+# Cargo
+Cargo.lock.bak
+
+# Claude / tooling
+.claude/projects/
+
+# === Migration-time exclusions ===
+# 既存の sibling directory が新 repo に取り込まれないようにする
+# subtree で正式に packages/ 配下に取り込んだ後に削除して終了
+pleasync-client/
+pleasync-desktop/
+pleasync-test/
+pleasync-client.bak/
