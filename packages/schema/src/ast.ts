@@ -31,6 +31,12 @@ export interface Model {
   type: ReferenceType;
   parentId: number;
   title: string;
+  /**
+   * Pleasanter 側の SiteId。
+   * - 既存サイトを使う場合は手動で指定
+   * - 未指定なら codegen で警告 / `pleasync apply` (Phase 3) で populate
+   */
+  siteId?: number;
   fields: Record<string, Field>;
 }
 
