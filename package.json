@@ -1,0 +1,72 @@
+{
+  "name": "@pleasync/client",
+  "version": "0.1.1-beta.2",
+  "description": "Pleasanter API client powered by Rust (napi-rs)",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sasakiyusuke2017015/pleasync-client.git"
+  },
+  "homepage": "https://github.com/sasakiyusuke2017015/pleasync-client#readme",
+  "bugs": {
+    "url": "https://github.com/sasakiyusuke2017015/pleasync-client/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "pleasanter",
+    "api",
+    "client",
+    "rust",
+    "napi"
+  ],
+  "engines": {
+    "node": ">= 18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "napi": {
+    "name": "client",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-pc-windows-msvc",
+        "aarch64-pc-windows-msvc",
+        "aarch64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu"
+      ]
+    }
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "build:docker": "docker build -t pleasync-client:latest . && docker create --name pleasync-extract pleasync-client:latest && docker cp pleasync-extract:/app/. ./dist/ && docker rm pleasync-extract",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "cargo test",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "optionalDependencies": {
+    "@pleasync/client-win32-x64-msvc": "0.1.1-beta.2",
+    "@pleasync/client-win32-arm64-msvc": "0.1.1-beta.2",
+    "@pleasync/client-darwin-arm64": "0.1.1-beta.2",
+    "@pleasync/client-linux-x64-gnu": "0.1.1-beta.2",
+    "@pleasync/client-linux-arm64-gnu": "0.1.1-beta.2"
+  }
+}
