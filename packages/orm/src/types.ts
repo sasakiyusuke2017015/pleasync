@@ -5,6 +5,9 @@
  */
 export interface PleasanterApi {
   getSite(siteId: number): Promise<unknown>;
+  createSite(parentId: number, siteData: unknown): Promise<number>;
+  updateSite(siteId: number, siteData: unknown): Promise<void>;
+  deleteSite(siteId: number): Promise<void>;
   getRecord(recordId: number, options?: unknown): Promise<unknown>;
   getRecords(siteId: number): Promise<unknown[]>;
   getRecordsWithOptions(siteId: number, options?: unknown): Promise<unknown[]>;

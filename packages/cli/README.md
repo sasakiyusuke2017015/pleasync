@@ -128,9 +128,44 @@ pleasync introspect 35535 \
 - `relation` は推定できないため出力しない（手動編集してください）
 - 日本語タイトルは識別子に変換できないため `site<id>` にフォールバック
 
+### `pleasync plan`
+
+schema と Pleasanter 現状の差分を表示する **read-only** コマンド（Phase 3.1）。
+
+```bash
+pleasync plan
+pleasync plan --schema ./db/schema.yaml --base-url ... --api-key ...
+```
+
+各 model について:
+- siteId 未指定 / 該当 site 不在 → `+ create`
+- title または column の label/choices に差分 → `~ update`
+- 完全一致 → `= unchanged`
+
+schema にない site 側の column は `(orphan)` として情報のみ表示（apply でも触らない）。
+システムカラム (`CreatedTime`, `Comments` 等) は orphan 扱いから除外。
+
+出力例:
+
+```
++ invoice — create new site
+    type: Results
+    parentId: 35534
+    title: 請求書
+    fields: 3
+~ customer (siteId=35535) — update
+    title: "顧客マスタ" → "顧客マスタ v2"
+    + column ClassC (text) "メモ"
+    ~ column ClassA label: "コード" → "顧客コード"
+= order (siteId=35540) — no changes
+
+Plan: 1 to create, 1 to update, 1 unchanged.
+```
+
 ## 後続フェーズ
 
-- **Phase 3**: `pleasync plan` / `pleasync apply` （schema を Pleasanter に反映）
+- **Phase 3.2**: `pleasync apply` — plan の結果を実際に Pleasanter へ反映
+  - `--allow-destroy` 必須の操作はまだ無し（site/column delete は対象外）
 
 ## テスト
 
@@ -138,7 +173,16 @@ pleasync introspect 35535 \
 pnpm --filter pleasync test
 ```
 
-45 tests passing (codegen 11 + command-generate 6 + introspect 21 + command-introspect 7)。
+66 tests passing。
+
+| ファイル | テスト数 |
+|---|---|
+| `generate.test.ts` | 14 |
+| `command-generate.test.ts` | 6 |
+| `introspect.test.ts` | 21 |
+| `command-introspect.test.ts` | 7 |
+| `diff.test.ts` | 12 |
+| `command-plan.test.ts` | 6 |
 
 ## ライセンス
 
