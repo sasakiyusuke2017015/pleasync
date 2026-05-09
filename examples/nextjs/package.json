@@ -1,15 +1,17 @@
 {
-  "name": "pleasync-test",
+  "name": "pleasync-nextjs-example",
   "version": "0.0.0",
   "private": true,
-  "description": "External integration test: install @pleasync/client@beta from npm and call it from Next.js",
+  "description": "Example: use generated typed client from @pleasync/orm + pleasync CLI in Next.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "generate": "pleasync generate"
   },
   "dependencies": {
     "@pleasync/client": "beta",
+    "@pleasync/orm": "workspace:*",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -18,6 +20,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "pleasync": "workspace:*",
     "typescript": "^5.6.0"
   }
 }

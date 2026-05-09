@@ -5,7 +5,9 @@ import type { SchemaAst, ServerConfig } from './ast.js';
  * pleasync.schema.yaml の文字列を AST にパースする。
  *
  * - YAML syntax error は SyntaxError として投げる
- * - server.* の `${ENV_VAR}` は process.env から展開する。未定義なら投げる。
+ * - **env 展開はしない**。`${ENV_VAR}` はリテラルとして AST に残る。
+ *   実際に server.* の値が必要なタイミング（apply/plan 等）で
+ *   `resolveServerConfig` を呼んで展開する。
  * - 構造のバリデーションは行わない（validateSchema で別途実施）
  */
 export function parseSchema(yamlText: string): SchemaAst {
@@ -21,31 +23,28 @@ export function parseSchema(yamlText: string): SchemaAst {
     throw new SyntaxError('schema must be a YAML mapping at top level');
   }
 
-  // server.* で環境変数展開
-  const expanded = expandEnvInServer(raw as Record<string, unknown>);
-
-  return expanded as unknown as SchemaAst;
+  return raw as unknown as SchemaAst;
 }
 
 const ENV_PATTERN = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
 
-function expandEnvInServer(
-  raw: Record<string, unknown>,
-): Record<string, unknown> {
-  if (raw.server === undefined || raw.server === null) {
-    return raw;
-  }
-  const server = raw.server as Record<string, unknown>;
-  const expanded: Record<string, unknown> = { ...server };
-
-  for (const key of ['baseUrl', 'apiKey', 'apiVersion'] as const) {
-    const value = server[key];
-    if (typeof value === 'string') {
-      expanded[key] = expandEnvInString(value);
-    }
-  }
-
-  return { ...raw, server: expanded as unknown as ServerConfig };
+/**
+ * server.* の `${ENV_VAR}` を実際に展開する。
+ *
+ * codegen では呼ばない（server.* を読まないため）。
+ * apply/plan 等の Pleasanter 接続が必要な処理から呼ぶ。
+ *
+ * 未定義の env を参照していたら例外を投げる。
+ */
+export function resolveServerConfig(server: ServerConfig): ServerConfig {
+  return {
+    baseUrl: expandEnvInString(server.baseUrl),
+    apiKey: expandEnvInString(server.apiKey),
+    apiVersion:
+      server.apiVersion !== undefined
+        ? expandEnvInString(server.apiVersion)
+        : undefined,
+  };
 }
 
 function expandEnvInString(input: string): string {

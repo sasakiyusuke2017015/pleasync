@@ -11,8 +11,11 @@ export class Engine {
 
   /** 接続設定から Engine を作る（本番経路）。 */
   static async fromConfig(config: EngineConfig): Promise<Engine> {
-    // dynamic import で @pleasync/client のロードを実利用時のみに（テストで重い napi を起こさない）
-    const mod = await import('@pleasync/client');
+    // dynamic import で @pleasync/client のロードを実利用時のみに。
+    // webpackIgnore コメントで webpack/turbopack のバンドル対象から外す
+    // (Next.js などのサーバーコードで bundler が .node を取り込もうとしないように)。
+    // Node.js 自体はこのコメントを単に無視する。
+    const mod = await import(/* webpackIgnore: true */ '@pleasync/client');
     const client = new mod.PleasanterClient({
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
