@@ -51,10 +51,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 対象パッケージとその全 workspace 依存をトポロジカル順にビルド。
-      # `...<pkg>` 構文で「<pkg> とその上流依存」を選択。
-      - name: Build (with workspace dependencies)
-        run: pnpm --filter "...${{ matrix.package }}" --filter "!@pleasync/client" build
+      # TS パッケージを依存順に明示ビルド。
+      # pnpm filter の union 挙動で複雑にしないために単純化。
+      # @pleasync/client は napi-rs の重い rust build を要するためここでは触らない
+      # （別 workflow CI.yml で OS マトリクスで build）。
+      - name: Build TS packages in dependency order
+        run: |
+          pnpm --filter @pleasync/schema build
+          pnpm --filter @pleasync/orm build
+          pnpm --filter pleasync build
 
       - name: Test
         run: pnpm --filter ${{ matrix.package }} test
