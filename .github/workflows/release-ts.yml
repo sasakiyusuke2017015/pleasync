@@ -1,0 +1,80 @@
+name: Release - TypeScript packages
+
+# 対象: @pleasync/schema, @pleasync/orm, pleasync (CLI)
+# トリガー: tag `bundle-v*.*.*` push (3 パッケージを lockstep で release)
+#
+# tag 命名:
+#   bundle-v0.1.0-beta.1   → 3 パッケージ全部を 0.1.0-beta.1 で publish (beta dist-tag)
+#   bundle-v0.1.0          → 同 0.1.0 で publish (latest dist-tag)
+#
+# 各パッケージの version は package.json で管理し、tag と一致させる前提。
+on:
+  push:
+    tags:
+      - 'bundle-v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Build + Publish (schema → orm → cli)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Determine dist-tag
+        id: dist-tag
+        run: |
+          REF="${GITHUB_REF#refs/tags/}"
+          REF="${REF#bundle-}"
+          if [[ "$REF" =~ -(beta|alpha|rc)\.[0-9]+$ ]]; then
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+            echo "Detected pre-release tag: $REF -> dist-tag=beta"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "Detected stable tag: $REF -> dist-tag=latest"
+          fi
+
+      # @pleasync/client は別 repo (release.yml で client-v*.*.*) で別 release。
+      # ここでは TS パッケージを依存順に build → publish。
+      - name: Build TS packages in dependency order
+        run: |
+          pnpm --filter @pleasync/schema build
+          pnpm --filter @pleasync/orm build
+          pnpm --filter pleasync build
+
+      - name: Publish @pleasync/schema
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter @pleasync/schema publish --access public --tag ${{ steps.dist-tag.outputs.tag }} --no-git-checks
+
+      - name: Publish @pleasync/orm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter @pleasync/orm publish --access public --tag ${{ steps.dist-tag.outputs.tag }} --no-git-checks
+
+      - name: Publish pleasync (CLI)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter pleasync publish --access public --tag ${{ steps.dist-tag.outputs.tag }} --no-git-checks
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ steps.dist-tag.outputs.tag == 'beta' }}

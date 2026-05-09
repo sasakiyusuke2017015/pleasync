@@ -1,8 +1,7 @@
 {
   "name": "@pleasync/schema",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.1",
   "description": "Schema DSL parser, AST, and validator for pleasync",
-  "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -11,15 +10,21 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "license": "MIT",
+  "keywords": ["pleasanter", "schema", "yaml", "dsl", "validator"],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sasakiyusuke2017015/pleasync.git",
     "directory": "packages/schema"
+  },
+  "homepage": "https://github.com/sasakiyusuke2017015/pleasync/tree/main/packages/schema#readme",
+  "bugs": {
+    "url": "https://github.com/sasakiyusuke2017015/pleasync/issues"
   },
   "engines": {
     "node": ">= 18"

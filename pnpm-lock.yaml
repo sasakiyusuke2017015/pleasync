@@ -48,19 +48,19 @@ importers:
 
   packages/cli:
     dependencies:
-      '@pleasync/client':
-        specifier: workspace:*
-        version: link:../client
       '@pleasync/orm':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../orm
       '@pleasync/schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schema
       yaml:
         specifier: ^2.6.0
         version: 2.8.4
     devDependencies:
+      '@pleasync/client':
+        specifier: workspace:*
+        version: link:../client
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.18
@@ -95,13 +95,13 @@ importers:
 
   packages/orm:
     dependencies:
+      '@pleasync/schema':
+        specifier: workspace:^
+        version: link:../schema
+    devDependencies:
       '@pleasync/client':
         specifier: workspace:*
         version: link:../client
-      '@pleasync/schema':
-        specifier: workspace:*
-        version: link:../schema
-    devDependencies:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.18
