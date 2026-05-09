@@ -65,7 +65,7 @@ function buildHeader(schemaPath?: string): string {
 function buildImports(): string {
   return [
     "import { Engine, ModelCollection } from '@pleasync/orm';",
-    "import type { ModelDef } from '@pleasync/orm';",
+    "import type { ModelDef, WhereOperator, OrderByDirection } from '@pleasync/orm';",
   ].join('\n');
 }
 
@@ -104,16 +104,25 @@ function buildModelTypes(modelName: string, model: Model): string {
   }
   updateLines.push('}');
 
+  // Where: each field accepts literal value (equals shorthand) or WhereOperator<T>
   const whereLines: string[] = [
     `export interface ${Pascal}Where {`,
-    '  id?: number;',
+    '  id?: WhereOperator<number>;',
   ];
   for (const [name, f] of fields) {
-    whereLines.push(`  ${name}?: ${tsTypeForRead(f)};`);
+    whereLines.push(`  ${name}?: WhereOperator<${tsTypeForRead(f)}>;`);
   }
   whereLines.push('}');
 
-  return [recordLines, createLines, updateLines, whereLines]
+  // OrderBy: each field optionally takes a direction
+  const orderByLines: string[] = [`export interface ${Pascal}OrderBy {`];
+  orderByLines.push('  id?: OrderByDirection;');
+  for (const [name] of fields) {
+    orderByLines.push(`  ${name}?: OrderByDirection;`);
+  }
+  orderByLines.push('}');
+
+  return [recordLines, createLines, updateLines, whereLines, orderByLines]
     .map((l) => l.join('\n'))
     .join('\n\n');
 }
@@ -136,7 +145,8 @@ function buildCollectionClass(modelName: string, model: Model): string {
     `  ${Pascal}Record,`,
     `  ${Pascal}CreateInput,`,
     `  ${Pascal}UpdateInput,`,
-    `  ${Pascal}Where`,
+    `  ${Pascal}Where,`,
+    `  ${Pascal}OrderBy`,
     '> {',
     `  protected readonly modelDef: ModelDef = {`,
     `    type: ${JSON.stringify(model.type)},`,

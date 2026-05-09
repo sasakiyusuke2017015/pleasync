@@ -161,6 +161,125 @@ describe('ModelCollection', () => {
         }),
       ).rejects.toThrow(/unknown field/);
     });
+
+    describe('where operators', () => {
+      it('リテラル値 → equals 1 件として扱う', async () => {
+        api.getRecordsWithOptions.mockResolvedValueOnce([]);
+        await collection.findMany({ where: { status: 100 } });
+        expect(api.getRecordsWithOptions).toHaveBeenCalledWith(
+          100,
+          expect.objectContaining({
+            ColumnFilterHash: { Status: '[100]' },
+          }),
+        );
+      });
+
+      it('{ equals: T } → 単一値配列', async () => {
+        api.getRecordsWithOptions.mockResolvedValueOnce([]);
+        await collection.findMany({
+          where: { status: { equals: 100 } } as never,
+        });
+        expect(api.getRecordsWithOptions).toHaveBeenCalledWith(
+          100,
+          expect.objectContaining({
+            ColumnFilterHash: { Status: '[100]' },
+          }),
+        );
+      });
+
+      it('{ in: [T, T, T] } → 複数値配列', async () => {
+        api.getRecordsWithOptions.mockResolvedValueOnce([]);
+        await collection.findMany({
+          where: { status: { in: [100, 200, 900] } } as never,
+        });
+        expect(api.getRecordsWithOptions).toHaveBeenCalledWith(
+          100,
+          expect.objectContaining({
+            ColumnFilterHash: { Status: '[100,200,900]' },
+          }),
+        );
+      });
+
+      it('equals と in の同時指定 → throw', async () => {
+        await expect(
+          collection.findMany({
+            where: { status: { equals: 100, in: [200] } } as never,
+          }),
+        ).rejects.toThrow(/both/);
+      });
+
+      it('演算子オブジェクト中身が空 → throw', async () => {
+        await expect(
+          collection.findMany({ where: { status: {} } as never }),
+        ).rejects.toThrow(/no recognized operator/);
+      });
+
+      it('in が array でない → throw', async () => {
+        await expect(
+          collection.findMany({
+            where: { status: { in: 'not-array' } } as never,
+          }),
+        ).rejects.toThrow(/must be an array/);
+      });
+
+      it('複数 field の AND', async () => {
+        api.getRecordsWithOptions.mockResolvedValueOnce([]);
+        await collection.findMany({
+          where: { code: 'C-001', status: { in: [100, 200] } } as never,
+        });
+        expect(api.getRecordsWithOptions).toHaveBeenCalledWith(
+          100,
+          expect.objectContaining({
+            ColumnFilterHash: {
+              ClassA: '["C-001"]',
+              Status: '[100,200]',
+            },
+          }),
+        );
+      });
+    });
+
+    describe('orderBy', () => {
+      it('asc/desc を ColumnSorterHash にマップ', async () => {
+        api.getRecordsWithOptions.mockResolvedValueOnce([]);
+        await collection.findMany({
+          orderBy: { code: 'asc', status: 'desc' } as never,
+        });
+        expect(api.getRecordsWithOptions).toHaveBeenCalledWith(
+          100,
+          expect.objectContaining({
+            ColumnSorterHash: { ClassA: 'asc', Status: 'desc' },
+          }),
+        );
+      });
+
+      it('未定義 field を orderBy に → throw', async () => {
+        await expect(
+          collection.findMany({
+            orderBy: { unknown: 'asc' } as never,
+          }),
+        ).rejects.toThrow(/unknown field in orderBy/);
+      });
+
+      it('asc/desc 以外の direction → throw', async () => {
+        await expect(
+          collection.findMany({
+            orderBy: { code: 'sideways' } as never,
+          }),
+        ).rejects.toThrow(/asc.*desc/);
+      });
+
+      it('where と orderBy 同時', async () => {
+        api.getRecordsWithOptions.mockResolvedValueOnce([]);
+        await collection.findMany({
+          where: { status: 100 },
+          orderBy: { code: 'asc' } as never,
+        });
+        const call = api.getRecordsWithOptions.mock.calls[0][1] as Record<string, unknown>;
+        expect(call.ColumnFilterHash).toEqual({ Status: '[100]' });
+        expect(call.ColumnSorterHash).toEqual({ ClassA: 'asc' });
+      });
+    });
   });
 
   describe('create', () => {

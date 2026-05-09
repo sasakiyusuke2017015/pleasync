@@ -29,17 +29,49 @@ const engine = await Engine.fromConfig({ baseUrl, apiKey, apiVersion: '1.1' })
 const engine = Engine.fromApi(mockApi)
 ```
 
-### `ModelCollection<TRecord, TCreate, TUpdate, TWhere>`
+### `ModelCollection<TRecord, TCreate, TUpdate, TWhere, TOrderBy>`
 
 1 model 用の CRUD 基底クラス。codegen がサブクラスを生成して `modelDef` を埋め込む。
 
 提供メソッド:
 
 - `findUnique({ where: { id } })` → `TRecord | null`
-- `findMany({ where?, take?, skip? })` → `TRecord[]`
+- `findMany({ where?, orderBy?, take?, skip? })` → `TRecord[]`
 - `create({ data })` → `TRecord`
 - `update({ where: { id }, data })` → `void`
 - `delete({ where: { id } })` → `void`
+
+### where 演算子
+
+各 field は `T` リテラルか `WhereOperator<T>` を受け付ける。
+
+```typescript
+// 等価略記
+await client.customer.findMany({ where: { status: 100 } })
+
+// 明示の equals
+await client.customer.findMany({ where: { status: { equals: 100 } } })
+
+// IN
+await client.customer.findMany({ where: { status: { in: [100, 200, 900] } } })
+
+// 複数 field の AND
+await client.customer.findMany({
+  where: { status: 100, code: 'C-001' }
+})
+```
+
+実装上は ColumnFilterHash に JSON 配列としてエンコード。`equals` は単一要素配列、`in` は複数要素配列。
+
+### orderBy
+
+```typescript
+await client.customer.findMany({
+  orderBy: { code: 'asc', status: 'desc' }
+})
+```
+
+ColumnSorterHash にマップされる。
 
 ### `transform` ユーティリティ
 

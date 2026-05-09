@@ -4,7 +4,7 @@
 /* eslint-disable */
 /* @ts-nocheck */
 import { Engine, ModelCollection } from '@pleasync/orm';
-import type { ModelDef } from '@pleasync/orm';
+import type { ModelDef, WhereOperator, OrderByDirection } from '@pleasync/orm';
 
 // === shared choices ===
 export type ProgressStatus = 100 | 200 | 900;
@@ -32,17 +32,25 @@ export interface CustomerUpdateInput {
 }
 
 export interface CustomerWhere {
-  id?: number;
-  title?: string;
-  body?: string;
-  status?: ProgressStatus;
+  id?: WhereOperator<number>;
+  title?: WhereOperator<string>;
+  body?: WhereOperator<string>;
+  status?: WhereOperator<ProgressStatus>;
+}
+
+export interface CustomerOrderBy {
+  id?: OrderByDirection;
+  title?: OrderByDirection;
+  body?: OrderByDirection;
+  status?: OrderByDirection;
 }
 
 class CustomerCollection extends ModelCollection<
   CustomerRecord,
   CustomerCreateInput,
   CustomerUpdateInput,
-  CustomerWhere
+  CustomerWhere,
+  CustomerOrderBy
 > {
   protected readonly modelDef: ModelDef = {
     type: "Results",
@@ -85,19 +93,29 @@ export interface IssueUpdateInput {
 }
 
 export interface IssueWhere {
-  id?: number;
-  title?: string;
-  body?: string;
-  status?: ProgressStatus;
-  startDate?: Date | string;
-  completionDate?: Date | string;
+  id?: WhereOperator<number>;
+  title?: WhereOperator<string>;
+  body?: WhereOperator<string>;
+  status?: WhereOperator<ProgressStatus>;
+  startDate?: WhereOperator<Date | string>;
+  completionDate?: WhereOperator<Date | string>;
+}
+
+export interface IssueOrderBy {
+  id?: OrderByDirection;
+  title?: OrderByDirection;
+  body?: OrderByDirection;
+  status?: OrderByDirection;
+  startDate?: OrderByDirection;
+  completionDate?: OrderByDirection;
 }
 
 class IssueCollection extends ModelCollection<
   IssueRecord,
   IssueCreateInput,
   IssueUpdateInput,
-  IssueWhere
+  IssueWhere,
+  IssueOrderBy
 > {
   protected readonly modelDef: ModelDef = {
     type: "Issues",
