@@ -6,6 +6,7 @@
 // Phase 3+ で追加予定:
 //   pleasync plan / apply / introspect
 
+import { runApplyCommand } from './command-apply.js';
 import { runGenerateCommand } from './command-generate.js';
 import { runIntrospectCommand } from './command-introspect.js';
 import { runPlanCommand } from './command-plan.js';
@@ -29,10 +30,7 @@ export async function main(argv: readonly string[]): Promise<void> {
       await runPlanCommand(rest);
       return;
     case 'apply':
-      process.stderr.write(
-        `[pleasync] 'apply' is planned for Phase 3.2 (not yet implemented).\n`,
-      );
-      process.exit(2);
+      await runApplyCommand(rest);
       return;
     default:
       process.stderr.write(`[pleasync] unknown command: ${command}\n`);
@@ -51,7 +49,7 @@ Commands:
   generate            Generate typed client from pleasync.schema.yaml
   introspect <id>...  Reverse-engineer schema from existing Pleasanter site(s)
   plan                Show diff between Pleasanter and schema (read-only)
-  apply               (planned) Apply schema to Pleasanter (creates/updates sites)
+  apply               Apply schema to Pleasanter (creates/updates sites)
 
 Run \`pleasync <command> --help\` for command-specific options.
 `);

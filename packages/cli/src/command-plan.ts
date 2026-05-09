@@ -1,7 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import { Engine } from '@pleasync/orm';
-import { parseSchema, validateSchema } from '@pleasync/schema';
+import {
+  parseSchema,
+  validateSchema,
+  type SchemaAst,
+} from '@pleasync/schema';
 import { formatPlan, planDiff, type PlanResult } from './diff.js';
 import type { RawSite } from './introspect.js';
 
@@ -20,15 +24,21 @@ export interface PlanCommandResult {
   text: string;
 }
 
+/** computePlan の戻り値: plan に加えて元 AST と取得済 site map を返す（apply で再利用） */
+export interface ComputePlanResult {
+  ast: SchemaAst;
+  schemaPath: string;
+  existingSites: Record<string, RawSite>;
+  plan: PlanResult;
+}
+
 /**
- * `pleasync plan` の中身。schema を読み、各 model に紐づく Pleasanter site を取得し、
- * diff を計算して整形済みテキストと PlanResult を返す。
- *
- * I/O は呼び出し元（runPlanCommand）で行う。テスト時は fetchSite を注入。
+ * schema 読み込み → 各 model の getSite → diff 計算まで。副作用なし。
+ * runPlan / runApply の両方で再利用する共通ロジック。
  */
-export async function runPlan(
+export async function computePlan(
   options: PlanCommandOptions,
-): Promise<PlanCommandResult> {
+): Promise<ComputePlanResult> {
   const cwd = options.cwd ?? process.cwd();
   const schemaPath = resolveRelative(
     options.schema ?? 'pleasync.schema.yaml',
@@ -45,21 +55,24 @@ export async function runPlan(
     throw new Error(`schema validation failed:\n${lines.join('\n')}`);
   }
 
-  const fetchSite =
-    options.fetchSite ?? (await defaultFetcher(options));
+  // siteId 指定がある model が無ければ fetchSite は呼ばない（env なしでも動く）
+  const needsFetch = Object.values(result.ast.models).some(
+    (m) => typeof m.siteId === 'number' && m.siteId > 0,
+  );
+  const fetchSite = needsFetch
+    ? (options.fetchSite ?? (await defaultFetcher(options)))
+    : null;
 
-  // 各 model について siteId が指定されていれば getSite を呼ぶ
   const existingSites: Record<string, RawSite> = {};
   for (const [modelName, model] of Object.entries(result.ast.models)) {
     if (typeof model.siteId !== 'number' || model.siteId <= 0) {
-      continue; // 未指定 or 0 placeholder → create 候補
+      continue;
     }
     try {
-      const raw = await fetchSite(model.siteId);
+      const raw = await fetchSite!(model.siteId);
       existingSites[modelName] = raw;
     } catch (err) {
       if (isNotFoundError(err)) {
-        // siteId 指定されてるが見つからない → create
         continue;
       }
       throw err;
@@ -67,8 +80,17 @@ export async function runPlan(
   }
 
   const plan = planDiff({ ast: result.ast, existingSites });
-  const text = formatPlan(plan);
+  return { ast: result.ast, schemaPath, existingSites, plan };
+}
 
+/**
+ * `pleasync plan` の中身。computePlan + 整形。
+ */
+export async function runPlan(
+  options: PlanCommandOptions,
+): Promise<PlanCommandResult> {
+  const { plan } = await computePlan(options);
+  const text = formatPlan(plan);
   return { plan, text };
 }
 
