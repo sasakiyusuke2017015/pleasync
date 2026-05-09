@@ -1,22 +1,27 @@
 {
   "name": "pleasync",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.1",
   "description": "CLI for pleasync: generate / plan / apply / introspect",
-  "private": true,
   "bin": {
     "pleasync": "./dist/bin.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "license": "MIT",
+  "keywords": ["pleasanter", "cli", "schema", "codegen", "prisma-like"],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sasakiyusuke2017015/pleasync.git",
     "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/sasakiyusuke2017015/pleasync/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/sasakiyusuke2017015/pleasync/issues"
   },
   "engines": {
     "node": ">= 18"
@@ -27,13 +32,16 @@
     "test:watch": "vitest",
     "clean": "rm -rf dist"
   },
+  "peerDependencies": {
+    "@pleasync/client": "^0.1.1-beta.2"
+  },
   "dependencies": {
-    "@pleasync/client": "workspace:*",
-    "@pleasync/orm": "workspace:*",
-    "@pleasync/schema": "workspace:*",
+    "@pleasync/orm": "workspace:^",
+    "@pleasync/schema": "workspace:^",
     "yaml": "^2.6.0"
   },
   "devDependencies": {
+    "@pleasync/client": "workspace:*",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

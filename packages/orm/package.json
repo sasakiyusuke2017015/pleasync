@@ -1,8 +1,7 @@
 {
   "name": "@pleasync/orm",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.1",
   "description": "Type-safe ORM-style runtime for pleasync (Prisma-like)",
-  "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -11,15 +10,21 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "license": "MIT",
+  "keywords": ["pleasanter", "orm", "prisma", "typed-client", "napi"],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sasakiyusuke2017015/pleasync.git",
     "directory": "packages/orm"
+  },
+  "homepage": "https://github.com/sasakiyusuke2017015/pleasync/tree/main/packages/orm#readme",
+  "bugs": {
+    "url": "https://github.com/sasakiyusuke2017015/pleasync/issues"
   },
   "engines": {
     "node": ">= 18"
@@ -30,11 +35,14 @@
     "test:watch": "vitest",
     "clean": "rm -rf dist"
   },
+  "peerDependencies": {
+    "@pleasync/client": "^0.1.1-beta.2"
+  },
   "dependencies": {
-    "@pleasync/client": "workspace:*",
-    "@pleasync/schema": "workspace:*"
+    "@pleasync/schema": "workspace:^"
   },
   "devDependencies": {
+    "@pleasync/client": "workspace:*",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
