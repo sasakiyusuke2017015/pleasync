@@ -1,5 +1,5 @@
 {
-  "name": "pleasync",
+  "name": "pleasync-monorepo",
   "private": true,
   "version": "0.0.0",
   "description": "Pleasanter 多環境構成管理ツール群（@pleasync/* monorepo）",
