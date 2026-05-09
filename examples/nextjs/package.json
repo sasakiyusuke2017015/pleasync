@@ -1,0 +1,23 @@
+{
+  "name": "pleasync-test",
+  "version": "0.0.0",
+  "private": true,
+  "description": "External integration test: install @pleasync/client@beta from npm and call it from Next.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@pleasync/client": "beta",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}

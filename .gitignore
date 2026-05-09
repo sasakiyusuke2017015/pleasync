@@ -46,9 +46,13 @@ Cargo.lock.bak
 .claude/settings.local.json
 
 # === Migration-time exclusions ===
-# 既存の sibling directory が新 repo に取り込まれないようにする
-# subtree で正式に packages/ 配下に取り込んだ後に削除して終了
+# 既存の sibling directory が新 repo に取り込まれないようにする。
+# pleasync-client は subtree で packages/client/ に統合済み。
+# pleasync-test は examples/nextjs/ に移動済み。
+# pleasync-desktop は今は別 repo のまま運用継続。
 pleasync-client/
 pleasync-desktop/
-pleasync-test/
 pleasync-client.bak/
+
+# Next.js auto-generated
+next-env.d.ts
