@@ -65,8 +65,18 @@ function buildHeader(schemaPath?: string): string {
 function buildImports(): string {
   return [
     "import { Engine, ModelCollection } from '@pleasync/orm';",
-    "import type { ModelDef, WhereOperator, OrderByDirection } from '@pleasync/orm';",
+    "import type { ModelDef, WhereOperator, OrderByDirection, ClientLike } from '@pleasync/orm';",
   ].join('\n');
+}
+
+function relationFieldsOf(model: Model): Array<[string, { to: string }]> {
+  const out: Array<[string, { to: string }]> = [];
+  for (const [name, f] of Object.entries(model.fields)) {
+    if (f.type === 'relation' && typeof (f as { to?: string }).to === 'string') {
+      out.push([name, { to: (f as { to: string }).to }]);
+    }
+  }
+  return out;
 }
 
 function unionFromChoices(list: Choice[]): string {
@@ -79,13 +89,23 @@ function unionFromChoices(list: Choice[]): string {
 function buildModelTypes(modelName: string, model: Model): string {
   const Pascal = pascalCase(modelName);
   const fields = Object.entries(model.fields);
+  const relations = relationFieldsOf(model);
 
+  // Record type: relation field は include 時に関連 Record になる union
   const recordLines: string[] = [
     `export interface ${Pascal}Record {`,
     '  id: number;',
   ];
   for (const [name, f] of fields) {
-    recordLines.push(`  ${name}: ${tsTypeForRead(f)};`);
+    if (f.type === 'relation') {
+      const target = (f as { to: string }).to;
+      // FK (number) または populated record (関連 model の Record)
+      recordLines.push(
+        `  ${name}: number | ${pascalCase(target)}Record;`,
+      );
+    } else {
+      recordLines.push(`  ${name}: ${tsTypeForRead(f)};`);
+    }
   }
   recordLines.push('  createdAt: Date;');
   recordLines.push('  updatedAt: Date;');
@@ -122,7 +142,25 @@ function buildModelTypes(modelName: string, model: Model): string {
   }
   orderByLines.push('}');
 
-  return [recordLines, createLines, updateLines, whereLines, orderByLines]
+  // Include: relation field のみ列挙
+  const includeLines: string[] = [`export interface ${Pascal}Include {`];
+  if (relations.length === 0) {
+    includeLines.push('  // (no relation fields)');
+  } else {
+    for (const [name] of relations) {
+      includeLines.push(`  ${name}?: boolean;`);
+    }
+  }
+  includeLines.push('}');
+
+  return [
+    recordLines,
+    createLines,
+    updateLines,
+    whereLines,
+    orderByLines,
+    includeLines,
+  ]
     .map((l) => l.join('\n'))
     .join('\n\n');
 }
@@ -131,7 +169,16 @@ function buildCollectionClass(modelName: string, model: Model): string {
   const Pascal = pascalCase(modelName);
   const fieldMap: string[] = [];
   for (const [name, f] of Object.entries(model.fields)) {
-    fieldMap.push(`      ${name}: { slot: ${JSON.stringify(f.slot)}, type: ${JSON.stringify(f.type)} },`);
+    if (f.type === 'relation') {
+      const target = (f as { to: string }).to;
+      fieldMap.push(
+        `      ${name}: { slot: ${JSON.stringify(f.slot)}, type: ${JSON.stringify(f.type)}, targetModel: ${JSON.stringify(target)} },`,
+      );
+    } else {
+      fieldMap.push(
+        `      ${name}: { slot: ${JSON.stringify(f.slot)}, type: ${JSON.stringify(f.type)} },`,
+      );
+    }
   }
 
   const siteIdLiteral =
@@ -146,7 +193,8 @@ function buildCollectionClass(modelName: string, model: Model): string {
     `  ${Pascal}CreateInput,`,
     `  ${Pascal}UpdateInput,`,
     `  ${Pascal}Where,`,
-    `  ${Pascal}OrderBy`,
+    `  ${Pascal}OrderBy,`,
+    `  ${Pascal}Include`,
     '> {',
     `  protected readonly modelDef: ModelDef = {`,
     `    type: ${JSON.stringify(model.type)},`,
@@ -165,8 +213,13 @@ function buildClient(models: Record<string, Model>): string {
   const fields = modelNames
     .map((m) => `  readonly ${m}: ${pascalCase(m)}Collection;`)
     .join('\n');
+  // ClientLike を満たすため、ModelCollection に this を渡す
   const inits = modelNames
-    .map((m) => `    this.${m} = new ${pascalCase(m)}Collection(engine);`)
+    .map((m) => `    this.${m} = new ${pascalCase(m)}Collection(engine, this);`)
+    .join('\n');
+  // __resolveCollection の switch 本体
+  const resolveCases = modelNames
+    .map((m) => `      case ${JSON.stringify(m)}: return this.${m} as never;`)
     .join('\n');
 
   return [
@@ -178,11 +231,19 @@ function buildClient(models: Record<string, Model>): string {
     "  apiVersion?: string;",
     '}',
     '',
-    'export class PleasyncClient {',
+    'export class PleasyncClient implements ClientLike {',
     fields,
     '',
     '  private constructor(engine: Engine) {',
     inits,
+    '  }',
+    '',
+    '  /** ClientLike: relation include 解決時に ModelCollection から呼ばれる */',
+    '  __resolveCollection(name: string) {',
+    '    switch (name) {',
+    resolveCases,
+    '      default: throw new Error(`unknown model: ${name}`);',
+    '    }',
     '  }',
     '',
     '  /** 設定から PleasyncClient を構築（@pleasync/client を内部 require） */',

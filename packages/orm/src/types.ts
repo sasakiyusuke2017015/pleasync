@@ -41,6 +41,8 @@ export interface FieldRuntimeDef {
   slot: string;
   /** Field の論理 type */
   type: FieldRuntimeType;
+  /** type === 'relation' のときの参照先 model 名 (logical name) */
+  targetModel?: string;
 }
 
 /** Pleasanter の ReferenceType */
@@ -80,10 +82,41 @@ export type WhereOperator<T> =
 /** orderBy の方向 */
 export type OrderByDirection = 'asc' | 'desc';
 
+/**
+ * include 句: 関連 model を fetch して結果に含めるかを指定する。
+ *
+ * 例: `{ customer: true }` で relation field `customer` の関連レコードを populate。
+ */
+export type IncludeArg = Record<string, boolean>;
+
+/** findUnique 引数 */
+export interface FindUniqueArgs<TInclude extends IncludeArg = IncludeArg> {
+  where: { id: number };
+  include?: TInclude;
+}
+
 /** findMany 引数 */
-export interface FindManyArgs<TWhere, TOrderBy = Record<string, OrderByDirection>> {
+export interface FindManyArgs<
+  TWhere,
+  TOrderBy = Record<string, OrderByDirection>,
+  TInclude extends IncludeArg = IncludeArg,
+> {
   where?: TWhere;
   orderBy?: TOrderBy;
+  include?: TInclude;
   take?: number;
   skip?: number;
+}
+
+/**
+ * relation 解決のための minimal な PleasyncClient インターフェース。
+ *
+ * 生成された PleasyncClient はこれを実装し、ModelCollection に
+ * 自身を渡すことで relation include 時に他 collection を引けるようにする。
+ */
+export interface ClientLike {
+  /** logical model name から該当 ModelCollection 風のオブジェクトを返す。 */
+  __resolveCollection(name: string): {
+    findUnique(args: { where: { id: number } }): Promise<unknown>;
+  };
 }

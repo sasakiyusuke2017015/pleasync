@@ -14,6 +14,9 @@ export type {
   ReferenceType,
   IdWhere,
   FindManyArgs,
+  FindUniqueArgs,
+  IncludeArg,
   WhereOperator,
   OrderByDirection,
+  ClientLike,
 } from './types.js';
