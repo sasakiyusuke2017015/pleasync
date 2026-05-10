@@ -310,4 +310,168 @@ models:
       expect(result.unchanged).toEqual([{ modelName: 'customer', siteId: 100 }]);
     });
   });
+
+  describe('--allow-destroy', () => {
+    const SCHEMA_NO_ORPHAN_REF = `
+version: '1'
+models:
+  customer:
+    type: Results
+    parentId: 1
+    siteId: 100
+    title: M
+    fields:
+      a: { slot: ClassA, label: A, type: text }
+`;
+
+    // existing site has ClassA (in schema) + ClassZ (orphan, NOT in schema)
+    const fetcherWithOrphan = async (): Promise<RawSite> => ({
+      SiteId: 100,
+      Title: 'M',
+      ReferenceType: 'Results',
+      ParentId: 1,
+      SiteSettings: {
+        Columns: [
+          { ColumnName: 'ClassA', LabelText: 'A' },
+          { ColumnName: 'ClassZ', LabelText: '消したい列' },
+        ],
+      },
+    });
+
+    it('デフォルト (allowDestroy=false) では orphan column を保持', async () => {
+      await writeFile(
+        join(workDir, 'pleasync.schema.yaml'),
+        SCHEMA_NO_ORPHAN_REF,
+      );
+
+      const result = await runApply({
+        cwd: workDir,
+        api,
+        fetchSite: fetcherWithOrphan,
+      });
+
+      // schema 側に変更が無いので updateSite は呼ばれない（orphan のみで destructive change なし）
+      expect(api.updateSite).not.toHaveBeenCalled();
+      expect(result.unchanged).toEqual([{ modelName: 'customer', siteId: 100 }]);
+    });
+
+    it('allowDestroy=true で orphan column を削除する', async () => {
+      await writeFile(
+        join(workDir, 'pleasync.schema.yaml'),
+        SCHEMA_NO_ORPHAN_REF,
+      );
+
+      api.updateSite.mockResolvedValueOnce(undefined);
+
+      const result = await runApply({
+        cwd: workDir,
+        api,
+        fetchSite: fetcherWithOrphan,
+        allowDestroy: true,
+      });
+
+      // updateSite が呼ばれて、ClassZ が Columns から消えていること
+      expect(api.updateSite).toHaveBeenCalledTimes(1);
+      const payload = api.updateSite.mock.calls[0][1] as {
+        SiteSettings: { Columns: Array<{ ColumnName: string }> };
+      };
+      const slots = payload.SiteSettings.Columns.map((c) => c.ColumnName);
+      expect(slots).toContain('ClassA');
+      expect(slots).not.toContain('ClassZ');
+
+      expect(result.updated).toEqual([{ modelName: 'customer', siteId: 100 }]);
+    });
+
+    it('allowDestroy=true でも schema にある column は変更しない (label 一致)', async () => {
+      await writeFile(
+        join(workDir, 'pleasync.schema.yaml'),
+        SCHEMA_NO_ORPHAN_REF,
+      );
+
+      api.updateSite.mockResolvedValueOnce(undefined);
+
+      await runApply({
+        cwd: workDir,
+        api,
+        fetchSite: fetcherWithOrphan,
+        allowDestroy: true,
+      });
+
+      const payload = api.updateSite.mock.calls[0][1] as {
+        SiteSettings: { Columns: Array<{ ColumnName: string; LabelText?: string }> };
+      };
+      const classA = payload.SiteSettings.Columns.find(
+        (c) => c.ColumnName === 'ClassA',
+      );
+      expect(classA?.LabelText).toBe('A');
+    });
+
+    it('allowDestroy=true で schema 変更 + orphan 削除を同時にできる', async () => {
+      await writeFile(
+        join(workDir, 'pleasync.schema.yaml'),
+        `
+version: '1'
+models:
+  customer:
+    type: Results
+    parentId: 1
+    siteId: 100
+    title: M
+    fields:
+      a: { slot: ClassA, label: 新ラベル, type: text }
+`,
+      );
+
+      const fetcher = async (): Promise<RawSite> => ({
+        SiteId: 100,
+        Title: 'M',
+        ReferenceType: 'Results',
+        ParentId: 1,
+        SiteSettings: {
+          Columns: [
+            { ColumnName: 'ClassA', LabelText: 'A' }, // label を変える
+            { ColumnName: 'ClassZ', LabelText: 'orphan' }, // 削除対象
+          ],
+        },
+      });
+
+      api.updateSite.mockResolvedValueOnce(undefined);
+
+      await runApply({ cwd: workDir, api, fetchSite: fetcher, allowDestroy: true });
+
+      const payload = api.updateSite.mock.calls[0][1] as {
+        SiteSettings: { Columns: Array<{ ColumnName: string; LabelText?: string }> };
+      };
+      const slots = payload.SiteSettings.Columns;
+      // ClassA は新ラベルになり、ClassZ は消える
+      expect(slots).toContainEqual(
+        expect.objectContaining({ ColumnName: 'ClassA', LabelText: '新ラベル' }),
+      );
+      expect(slots.find((c) => c.ColumnName === 'ClassZ')).toBeUndefined();
+    });
+
+    it('allowDestroy=true でも schema にある column は削除されない (誤削除防止)', async () => {
+      // schema は ClassA のみ、existing は ClassA + ClassZ。
+      // ClassZ だけ削除されるべき (ClassA が消えてはいけない)。
+      await writeFile(
+        join(workDir, 'pleasync.schema.yaml'),
+        SCHEMA_NO_ORPHAN_REF,
+      );
+
+      api.updateSite.mockResolvedValueOnce(undefined);
+
+      await runApply({
+        cwd: workDir,
+        api,
+        fetchSite: fetcherWithOrphan,
+        allowDestroy: true,
+      });
+
+      const payload = api.updateSite.mock.calls[0][1] as {
+        SiteSettings: { Columns: Array<{ ColumnName: string }> };
+      };
+      const slots = payload.SiteSettings.Columns.map((c) => c.ColumnName);
+      expect(slots).toContain('ClassA');
+    });
+  });
 });
