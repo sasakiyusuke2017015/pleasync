@@ -237,6 +237,145 @@ describe('ModelCollection', () => {
           }),
         );
       });
+
+      describe('client-side operators', () => {
+        it('not: client-side で除外 (server-side 送信なし)', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, ClassHash: { ClassA: 'A' }, Status: 100 },
+            { ResultId: 2, ClassHash: { ClassA: 'B' }, Status: 200 },
+          ]);
+          const r = await collection.findMany({
+            where: { status: { not: 100 } } as never,
+          });
+          expect(r).toHaveLength(1);
+          expect(r[0].id).toBe(2);
+        });
+
+        it('notIn: 配列に含まれないものだけ', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, Status: 100 },
+            { ResultId: 2, Status: 200 },
+            { ResultId: 3, Status: 900 },
+          ]);
+          const r = await collection.findMany({
+            where: { status: { notIn: [100, 900] } } as never,
+          });
+          expect(r).toHaveLength(1);
+          expect(r[0].id).toBe(2);
+        });
+
+        it('contains: 部分文字列マッチ', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, ClassHash: { ClassA: 'C-001' } },
+            { ResultId: 2, ClassHash: { ClassA: 'X-002' } },
+            { ResultId: 3, ClassHash: { ClassA: 'C-003' } },
+          ]);
+          const r = await collection.findMany({
+            where: { code: { contains: 'C-' } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([1, 3]);
+        });
+
+        it('startsWith / endsWith', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, ClassHash: { ClassA: 'foo-bar' } },
+            { ResultId: 2, ClassHash: { ClassA: 'baz-foo' } },
+          ]);
+          let r = await collection.findMany({
+            where: { code: { startsWith: 'foo' } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([1]);
+
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, ClassHash: { ClassA: 'foo-bar' } },
+            { ResultId: 2, ClassHash: { ClassA: 'baz-foo' } },
+          ]);
+          r = await collection.findMany({
+            where: { code: { endsWith: 'foo' } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([2]);
+        });
+
+        it('gt / gte / lt / lte (number)', async () => {
+          const data = [
+            { ResultId: 1, Status: 100 },
+            { ResultId: 2, Status: 200 },
+            { ResultId: 3, Status: 300 },
+          ];
+
+          api.getRecordsWithOptions.mockResolvedValueOnce(data);
+          let r = await collection.findMany({
+            where: { status: { gt: 100 } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([2, 3]);
+
+          api.getRecordsWithOptions.mockResolvedValueOnce(data);
+          r = await collection.findMany({
+            where: { status: { gte: 200 } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([2, 3]);
+
+          api.getRecordsWithOptions.mockResolvedValueOnce(data);
+          r = await collection.findMany({
+            where: { status: { lt: 200 } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([1]);
+
+          api.getRecordsWithOptions.mockResolvedValueOnce(data);
+          r = await collection.findMany({
+            where: { status: { lte: 200 } } as never,
+          });
+          expect(r.map((x) => x.id)).toEqual([1, 2]);
+        });
+
+        it('client-side filter + take/skip は filter 後の slice', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, ClassHash: { ClassA: 'C-001' } },
+            { ResultId: 2, ClassHash: { ClassA: 'X-002' } },
+            { ResultId: 3, ClassHash: { ClassA: 'C-003' } },
+            { ResultId: 4, ClassHash: { ClassA: 'C-004' } },
+          ]);
+          const r = await collection.findMany({
+            where: { code: { contains: 'C-' } },
+            take: 2,
+            skip: 1,
+          } as never);
+          // contains 'C-' で 1, 3, 4 → skip 1 → [3, 4] → take 2 → [3, 4]
+          expect(r.map((x) => x.id)).toEqual([3, 4]);
+        });
+
+        it('client-side filter があるとき server に take/skip を送らない', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([]);
+          await collection.findMany({
+            where: { code: { contains: 'X' } },
+            take: 5,
+            skip: 2,
+          } as never);
+          const opts = api.getRecordsWithOptions.mock.calls[0][1] as Record<string, unknown>;
+          expect(opts.PageSize).toBeUndefined();
+          expect(opts.Offset).toBeUndefined();
+        });
+
+        it('server (equals) + client (contains) を AND で組み合わせ', async () => {
+          api.getRecordsWithOptions.mockResolvedValueOnce([
+            { ResultId: 1, ClassHash: { ClassA: 'C-001' }, Status: 100 },
+            { ResultId: 2, ClassHash: { ClassA: 'X-002' }, Status: 100 },
+            { ResultId: 3, ClassHash: { ClassA: 'C-003' }, Status: 100 },
+          ]);
+          const r = await collection.findMany({
+            where: {
+              status: 100,
+              code: { contains: 'C-' },
+            },
+          } as never);
+          // server で status=100 (3 件全部返ってくる想定) + client で code に C- を含むもの
+          expect(r.map((x) => x.id)).toEqual([1, 3]);
+
+          // server には status=100 の filter のみ送られる
+          const opts = api.getRecordsWithOptions.mock.calls[0][1] as Record<string, unknown>;
+          expect(opts.ColumnFilterHash).toEqual({ Status: '[100]' });
+        });
+      });
     });
 
     describe('orderBy', () => {

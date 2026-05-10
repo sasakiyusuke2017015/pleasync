@@ -67,16 +67,35 @@ export interface IdWhere {
 /**
  * where 句の値部分。リテラル値（equals 略記）か演算子オブジェクト。
  *
+ * Server-side（Pleasanter ColumnFilterHash で送信）:
+ *   `equals`, `in`
+ *
+ * Client-side（fetch 後に JS でフィルタ）:
+ *   `not`, `notIn`, `contains`, `startsWith`, `endsWith`, `gt`, `gte`, `lt`, `lte`
+ *
  * 例:
- *   `{ status: 100 }`            → status equals 100
- *   `{ status: { equals: 100 } }` → 同上
- *   `{ status: { in: [100, 200] } }` → status IN (100, 200)
+ *   `{ status: 100 }`                 → status === 100 (server)
+ *   `{ status: { in: [100, 200] } }`  → status IN (100, 200) (server)
+ *   `{ code: { contains: 'C-' } }`    → code に 'C-' を含む (client)
+ *   `{ amount: { gt: 1000 } }`        → amount > 1000 (client)
+ *
+ * 注: client-side ops は fetch した後に JS でフィルタするため、
+ * 巨大なテーブルで take/skip と組み合わせる場合パフォーマンスに注意。
  */
 export type WhereOperator<T> =
   | T
   | {
       equals?: T;
       in?: readonly T[];
+      not?: T;
+      notIn?: readonly T[];
+      contains?: string;
+      startsWith?: string;
+      endsWith?: string;
+      gt?: T;
+      gte?: T;
+      lt?: T;
+      lte?: T;
     };
 
 /** orderBy の方向 */
