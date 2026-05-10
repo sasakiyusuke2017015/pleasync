@@ -69,6 +69,10 @@ export abstract class ModelCollection<
   async findMany(
     args?: FindManyArgs<TWhere, TOrderBy, TInclude>,
   ): Promise<TRecord[]> {
+    const where = (args?.where ?? null) as Record<string, unknown> | null;
+    const filterOps = where ? this.buildFilterOps(where) : [];
+    const hasClientFilter = filterOps.some((op) => op.clientPredicates.length > 0);
+
     let raw: unknown[];
 
     const hasOptions =
@@ -79,7 +83,12 @@ export abstract class ModelCollection<
         args.skip !== undefined);
 
     if (hasOptions) {
-      const options = this.buildGetOptions(args);
+      // client-side filter があるときは take/skip をサーバーに送らない
+      // (フィルタ後に JS 側で再 paginate する)
+      const argsForServer: FindManyArgs<TWhere, TOrderBy, TInclude> = hasClientFilter
+        ? { ...args, take: undefined, skip: undefined }
+        : args;
+      const options = this.buildGetOptions(argsForServer, filterOps);
       raw = await this.engine
         .api_()
         .getRecordsWithOptions(this.modelDef.siteId, options);
@@ -87,9 +96,26 @@ export abstract class ModelCollection<
       raw = await this.engine.api_().getRecords(this.modelDef.siteId);
     }
 
-    const records = raw.map((r) =>
+    let records = raw.map((r) =>
       fromApiRecord(r as Record<string, unknown>, this.modelDef),
     );
+
+    // client-side filter
+    if (hasClientFilter) {
+      records = records.filter((r) =>
+        filterOps.every((op) =>
+          op.clientPredicates.every((pred) => pred(r)),
+        ),
+      );
+
+      // take/skip を JS 側で再適用
+      if (args?.skip !== undefined) {
+        records = records.slice(args.skip);
+      }
+      if (args?.take !== undefined) {
+        records = records.slice(0, args.take);
+      }
+    }
 
     if (args?.include) {
       await this.resolveIncludes(records, args.include);
@@ -201,6 +227,7 @@ export abstract class ModelCollection<
    */
   protected buildGetOptions(
     args: FindManyArgs<TWhere, TOrderBy>,
+    filterOps?: FilterOp[],
   ): Record<string, unknown> {
     const options: Record<string, unknown> = {};
 
@@ -211,10 +238,19 @@ export abstract class ModelCollection<
       options.Offset = args.skip;
     }
 
-    if (args.where && typeof args.where === 'object') {
-      const filterHash = this.buildFilterHash(
-        args.where as Record<string, unknown>,
-      );
+    const ops =
+      filterOps ??
+      (args.where && typeof args.where === 'object'
+        ? this.buildFilterOps(args.where as Record<string, unknown>)
+        : []);
+
+    if (ops.length > 0) {
+      const filterHash: Record<string, string> = {};
+      for (const op of ops) {
+        if (op.serverArray !== null) {
+          filterHash[op.fieldDef.slot] = JSON.stringify(op.serverArray);
+        }
+      }
       if (Object.keys(filterHash).length > 0) {
         options.ColumnFilterHash = filterHash;
       }
@@ -232,18 +268,17 @@ export abstract class ModelCollection<
     return options;
   }
 
-  private buildFilterHash(
-    where: Record<string, unknown>,
-  ): Record<string, string> {
-    const filterHash: Record<string, string> = {};
+  /** where から server / client 両方の filter ops を構築 */
+  protected buildFilterOps(where: Record<string, unknown>): FilterOp[] {
+    const ops: FilterOp[] = [];
     for (const [logical, raw] of Object.entries(where)) {
       const fieldDef = this.modelDef.fieldMap[logical];
       if (!fieldDef) {
         throw new Error(`unknown field in where: '${logical}'`);
       }
-      filterHash[fieldDef.slot] = encodeWhereValue(raw, logical);
+      ops.push(classifyWhereValue(logical, fieldDef, raw));
     }
-    return filterHash;
+    return ops;
   }
 
   private buildSorterHash(
@@ -266,45 +301,151 @@ export abstract class ModelCollection<
   }
 }
 
-function encodeWhereValue(value: unknown, fieldName: string): string {
-  // リテラル primitive → equals 1 件
+/** 1 field の filter operation。server/client 両方を保持。 */
+interface FilterOp {
+  fieldDef: { slot: string; type: string };
+  /** ColumnFilterHash 用の値（JSON 配列）。client-side のみなら null */
+  serverArray: readonly unknown[] | null;
+  /** record に適用する predicate 群 */
+  clientPredicates: Array<(record: Record<string, unknown>) => boolean>;
+}
+
+interface FilterOpInput {
+  equals?: unknown;
+  in?: readonly unknown[];
+  not?: unknown;
+  notIn?: readonly unknown[];
+  contains?: unknown;
+  startsWith?: unknown;
+  endsWith?: unknown;
+  gt?: unknown;
+  gte?: unknown;
+  lt?: unknown;
+  lte?: unknown;
+}
+
+function classifyWhereValue(
+  logicalName: string,
+  fieldDef: { slot: string; type: string },
+  value: unknown,
+): FilterOp {
+  // リテラル primitive → equals 略記 → server-side
   if (
     value === null ||
     typeof value === 'string' ||
     typeof value === 'number' ||
     typeof value === 'boolean'
   ) {
-    return JSON.stringify([value]);
+    return {
+      fieldDef,
+      serverArray: [value],
+      clientPredicates: [],
+    };
   }
 
   if (typeof value !== 'object') {
-    throw new Error(`invalid where value for '${fieldName}': ${typeof value}`);
+    throw new Error(`invalid where value for '${logicalName}': ${typeof value}`);
   }
 
-  const op = value as { equals?: unknown; in?: readonly unknown[] };
+  const op = value as FilterOpInput;
+
+  // server-side ops: equals / in
+  let serverArray: readonly unknown[] | null = null;
   const hasEquals = 'equals' in op && op.equals !== undefined;
   const hasIn = 'in' in op && op.in !== undefined;
 
   if (hasEquals && hasIn) {
     throw new Error(
-      `where '${fieldName}' has both 'equals' and 'in' (specify only one)`,
+      `where '${logicalName}' has both 'equals' and 'in' (specify only one)`,
+    );
+  }
+  if (hasEquals) {
+    serverArray = [op.equals];
+  } else if (hasIn) {
+    if (!Array.isArray(op.in)) {
+      throw new Error(`where '${logicalName}.in' must be an array`);
+    }
+    serverArray = op.in;
+  }
+
+  const clientPredicates: FilterOp['clientPredicates'] = [];
+
+  // client-side: not / notIn / contains / startsWith / endsWith / gt / gte / lt / lte
+  if ('not' in op && op.not !== undefined) {
+    const target = op.not;
+    clientPredicates.push((r) => !sameValue(r[logicalName], target));
+  }
+  if ('notIn' in op && op.notIn !== undefined) {
+    if (!Array.isArray(op.notIn)) {
+      throw new Error(`where '${logicalName}.notIn' must be an array`);
+    }
+    const targets = op.notIn;
+    clientPredicates.push((r) => !targets.some((t) => sameValue(r[logicalName], t)));
+  }
+  if ('contains' in op && op.contains !== undefined) {
+    const sub = String(op.contains);
+    clientPredicates.push((r) => stringOf(r[logicalName]).includes(sub));
+  }
+  if ('startsWith' in op && op.startsWith !== undefined) {
+    const sub = String(op.startsWith);
+    clientPredicates.push((r) => stringOf(r[logicalName]).startsWith(sub));
+  }
+  if ('endsWith' in op && op.endsWith !== undefined) {
+    const sub = String(op.endsWith);
+    clientPredicates.push((r) => stringOf(r[logicalName]).endsWith(sub));
+  }
+  if ('gt' in op && op.gt !== undefined) {
+    const t = op.gt;
+    clientPredicates.push((r) => compareValues(r[logicalName], t) > 0);
+  }
+  if ('gte' in op && op.gte !== undefined) {
+    const t = op.gte;
+    clientPredicates.push((r) => compareValues(r[logicalName], t) >= 0);
+  }
+  if ('lt' in op && op.lt !== undefined) {
+    const t = op.lt;
+    clientPredicates.push((r) => compareValues(r[logicalName], t) < 0);
+  }
+  if ('lte' in op && op.lte !== undefined) {
+    const t = op.lte;
+    clientPredicates.push((r) => compareValues(r[logicalName], t) <= 0);
+  }
+
+  if (serverArray === null && clientPredicates.length === 0) {
+    throw new Error(
+      `where '${logicalName}' has no recognized operator`,
     );
   }
 
-  if (hasEquals) {
-    return JSON.stringify([op.equals]);
-  }
+  return { fieldDef, serverArray, clientPredicates };
+}
 
-  if (hasIn) {
-    if (!Array.isArray(op.in)) {
-      throw new Error(`where '${fieldName}.in' must be an array`);
-    }
-    return JSON.stringify(op.in);
-  }
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  return a === b;
+}
 
-  throw new Error(
-    `where '${fieldName}' has no recognized operator (equals/in)`,
-  );
+function stringOf(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  return String(v);
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  if (a instanceof Date) a = a.getTime();
+  if (b instanceof Date) b = b.getTime();
+  if (typeof a === 'string' && typeof b === 'string' && (isIsoDate(a) || isIsoDate(b))) {
+    const da = Date.parse(a);
+    const db = Date.parse(b);
+    if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+  }
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'string' && typeof b === 'string') return a.localeCompare(b);
+  // 型不一致 → 比較失敗扱い (false にする)
+  return 0;
+}
+
+function isIsoDate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T/.test(s);
 }
 
 function isNotFoundError(err: unknown): boolean {
