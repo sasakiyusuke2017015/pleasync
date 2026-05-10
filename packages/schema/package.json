@@ -1,6 +1,6 @@
 {
   "name": "@pleasync/schema",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Schema DSL parser, AST, and validator for pleasync",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@pleasync/orm",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Type-safe ORM-style runtime for pleasync (Prisma-like)",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
