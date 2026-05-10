@@ -350,4 +350,172 @@ describe('ModelCollection', () => {
       expect(api.deleteRecord).toHaveBeenCalledWith(99);
     });
   });
+
+  describe('relation include', () => {
+    interface InvoiceRecord {
+      id: number;
+      customerId: number | { id: number; code: string };
+      amount: number;
+    }
+    type InvoiceCreate = { customerId: number; amount: number };
+    type InvoiceUpdate = Partial<InvoiceCreate>;
+    interface InvoiceWhere {
+      customerId?: number;
+    }
+
+    class InvoiceCollection extends ModelCollection<
+      InvoiceRecord,
+      InvoiceCreate,
+      InvoiceUpdate,
+      InvoiceWhere
+    > {
+      protected readonly modelDef = {
+        type: 'Results' as const,
+        parentId: 1,
+        siteId: 200,
+        fieldMap: {
+          customerId: {
+            slot: 'ClassA',
+            type: 'relation' as const,
+            targetModel: 'customer',
+          },
+          amount: { slot: 'NumA', type: 'number' as const },
+        },
+      };
+    }
+
+    it('include を呼ぶと client.__resolveCollection 経由で関連 record が populate される', async () => {
+      const customerCollection = {
+        findUnique: vi.fn().mockResolvedValue({ id: 7, code: 'C-007' }),
+      };
+
+      const fakeClient = {
+        __resolveCollection: vi
+          .fn()
+          .mockReturnValue(customerCollection),
+      };
+
+      api.getRecord.mockResolvedValueOnce({
+        ResultId: 1,
+        ClassHash: { ClassA: 7 },
+        NumHash: { NumA: 1000 },
+      });
+
+      const invoices = new InvoiceCollection(Engine.fromApi(api), fakeClient);
+
+      const result = await invoices.findUnique({
+        where: { id: 1 },
+        include: { customerId: true },
+      });
+
+      expect(fakeClient.__resolveCollection).toHaveBeenCalledWith('customer');
+      expect(customerCollection.findUnique).toHaveBeenCalledWith({
+        where: { id: 7 },
+      });
+      expect(result?.customerId).toEqual({ id: 7, code: 'C-007' });
+    });
+
+    it('findMany + include で同じ id は 1 回だけ fetch される (重複排除)', async () => {
+      const customerCollection = {
+        findUnique: vi.fn().mockImplementation(({ where }: { where: { id: number } }) =>
+          Promise.resolve({ id: where.id, code: `C-${where.id}` }),
+        ),
+      };
+      const fakeClient = {
+        __resolveCollection: vi.fn().mockReturnValue(customerCollection),
+      };
+
+      api.getRecords.mockResolvedValueOnce([
+        { ResultId: 1, ClassHash: { ClassA: 7 } },
+        { ResultId: 2, ClassHash: { ClassA: 7 } }, // 同じ customer
+        { ResultId: 3, ClassHash: { ClassA: 8 } }, // 別 customer
+      ]);
+
+      const invoices = new InvoiceCollection(Engine.fromApi(api), fakeClient);
+      const result = await invoices.findMany({ include: { customerId: true } });
+
+      // findUnique は customer 7 と 8 で 2 回だけ
+      expect(customerCollection.findUnique).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(3);
+      expect(result[0].customerId).toEqual({ id: 7, code: 'C-7' });
+      expect(result[1].customerId).toEqual({ id: 7, code: 'C-7' });
+      expect(result[2].customerId).toEqual({ id: 8, code: 'C-8' });
+    });
+
+    it('include 指定なしなら client は呼ばれない', async () => {
+      const fakeClient = {
+        __resolveCollection: vi.fn(),
+      };
+
+      api.getRecord.mockResolvedValueOnce({
+        ResultId: 1,
+        ClassHash: { ClassA: 7 },
+      });
+
+      const invoices = new InvoiceCollection(Engine.fromApi(api), fakeClient);
+      await invoices.findUnique({ where: { id: 1 } });
+
+      expect(fakeClient.__resolveCollection).not.toHaveBeenCalled();
+    });
+
+    it('client 無しで include 指定 → throw', async () => {
+      api.getRecord.mockResolvedValueOnce({
+        ResultId: 1,
+        ClassHash: { ClassA: 7 },
+      });
+
+      const invoices = new InvoiceCollection(Engine.fromApi(api));
+
+      await expect(
+        invoices.findUnique({
+          where: { id: 1 },
+          include: { customerId: true },
+        }),
+      ).rejects.toThrow(/no client reference/);
+    });
+
+    it('include の対象が relation field でない → throw', async () => {
+      const fakeClient = {
+        __resolveCollection: vi.fn(),
+      };
+
+      api.getRecord.mockResolvedValueOnce({
+        ResultId: 1,
+        ClassHash: { ClassA: 7 },
+        NumHash: { NumA: 1000 },
+      });
+
+      const invoices = new InvoiceCollection(Engine.fromApi(api), fakeClient);
+
+      await expect(
+        invoices.findUnique({
+          where: { id: 1 },
+          include: { amount: true } as never,
+        }),
+      ).rejects.toThrow(/not a relation field/);
+    });
+
+    it('include: false なら fetch しない', async () => {
+      const customerCollection = {
+        findUnique: vi.fn(),
+      };
+      const fakeClient = {
+        __resolveCollection: vi.fn().mockReturnValue(customerCollection),
+      };
+
+      api.getRecord.mockResolvedValueOnce({
+        ResultId: 1,
+        ClassHash: { ClassA: 7 },
+      });
+
+      const invoices = new InvoiceCollection(Engine.fromApi(api), fakeClient);
+      const result = await invoices.findUnique({
+        where: { id: 1 },
+        include: { customerId: false },
+      });
+
+      expect(customerCollection.findUnique).not.toHaveBeenCalled();
+      expect(result?.customerId).toBe(7); // FK のまま
+    });
+  });
 });

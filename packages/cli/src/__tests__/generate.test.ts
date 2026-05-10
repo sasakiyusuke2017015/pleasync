@@ -83,7 +83,7 @@ models:
     expect(block).toMatch(/b\?: OrderByDirection;/);
   });
 
-  it('Collection は 5 番目の型パラメータに OrderBy を渡す', () => {
+  it('Collection は型パラメータに OrderBy / Include を順に渡す', () => {
     const code = generate(`
 version: '1'
 models:
@@ -96,7 +96,82 @@ models:
       code: { slot: ClassA, label: c, type: text }
 `);
 
-    expect(code).toMatch(/CustomerWhere,\s+CustomerOrderBy/);
+    expect(code).toMatch(/CustomerWhere,\s+CustomerOrderBy,\s+CustomerInclude/);
+  });
+
+  describe('relation include', () => {
+    const SCHEMA_WITH_RELATION = `
+version: '1'
+models:
+  customer:
+    type: Results
+    parentId: 1
+    siteId: 100
+    title: 顧客
+    fields:
+      code: { slot: ClassA, label: コード, type: text }
+  invoice:
+    type: Results
+    parentId: 1
+    siteId: 200
+    title: 請求書
+    fields:
+      number: { slot: ClassA, label: 番号, type: text }
+      customerId: { slot: ClassB, label: 顧客, type: relation, to: customer }
+`;
+
+    it('Include type に relation field のみ列挙', () => {
+      const code = generate(SCHEMA_WITH_RELATION);
+
+      const m = code.match(/export interface InvoiceInclude \{[\s\S]*?\}/);
+      expect(m).toBeTruthy();
+      const block = m![0];
+      expect(block).toMatch(/customerId\?: boolean;/);
+      // number は relation じゃないので含まれない
+      expect(block).not.toMatch(/number\?:/);
+    });
+
+    it('relation field の Record 型は number | <Target>Record 型', () => {
+      const code = generate(SCHEMA_WITH_RELATION);
+
+      const m = code.match(/export interface InvoiceRecord \{[\s\S]*?\}/);
+      expect(m).toBeTruthy();
+      const block = m![0];
+      expect(block).toMatch(/customerId: number \| CustomerRecord;/);
+    });
+
+    it('fieldMap に targetModel が埋め込まれる', () => {
+      const code = generate(SCHEMA_WITH_RELATION);
+      expect(code).toMatch(
+        /customerId: \{ slot: "ClassB", type: "relation", targetModel: "customer" \}/,
+      );
+    });
+
+    it('relation 無しモデルの Include は空インターフェース風', () => {
+      const code = generate(SCHEMA_WITH_RELATION);
+      const m = code.match(/export interface CustomerInclude \{[\s\S]*?\}/);
+      expect(m).toBeTruthy();
+      const block = m![0];
+      expect(block).toMatch(/no relation fields/);
+    });
+
+    it('PleasyncClient が ClientLike を実装し __resolveCollection を持つ', () => {
+      const code = generate(SCHEMA_WITH_RELATION);
+      expect(code).toMatch(/export class PleasyncClient implements ClientLike/);
+      expect(code).toMatch(/__resolveCollection\(name: string\)/);
+      expect(code).toMatch(/case "customer": return this\.customer/);
+      expect(code).toMatch(/case "invoice": return this\.invoice/);
+    });
+
+    it('Collection 初期化で this を渡す (ClientLike として)', () => {
+      const code = generate(SCHEMA_WITH_RELATION);
+      expect(code).toMatch(
+        /this\.customer = new CustomerCollection\(engine, this\);/,
+      );
+      expect(code).toMatch(
+        /this\.invoice = new InvoiceCollection\(engine, this\);/,
+      );
+    });
   });
 
   it('field type ごとに正しい TS 型を生成', () => {
@@ -215,7 +290,7 @@ models:
     expect(block).toMatch(/b\?: string;/);
   });
 
-  it('relation field → number 型 (MVP)', () => {
+  it('relation field の Record 型は number | <Target>Record', () => {
     const code = generate(`
 version: '1'
 models:
@@ -235,7 +310,7 @@ models:
       customerId: { slot: ClassA, label: c, type: relation, to: customer }
 `);
 
-    expect(code).toMatch(/customerId: number;/);
+    expect(code).toMatch(/customerId: number \| CustomerRecord;/);
   });
 
   it('siteId 省略時はプレースホルダコメント付き 0', () => {
@@ -276,8 +351,12 @@ models:
 
     expect(code).toMatch(/readonly customer: CustomerCollection/);
     expect(code).toMatch(/readonly invoice: InvoiceCollection/);
-    expect(code).toMatch(/this\.customer = new CustomerCollection\(engine\);/);
-    expect(code).toMatch(/this\.invoice = new InvoiceCollection\(engine\);/);
+    expect(code).toMatch(
+      /this\.customer = new CustomerCollection\(engine, this\);/,
+    );
+    expect(code).toMatch(
+      /this\.invoice = new InvoiceCollection\(engine, this\);/,
+    );
   });
 
   it('生成コードに AUTO-GENERATED ヘッダ', () => {

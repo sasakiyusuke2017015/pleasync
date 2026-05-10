@@ -1,7 +1,10 @@
 import { Engine } from './engine.js';
 import { fromApiRecord, toApiPayload } from './transform.js';
 import type {
+  ClientLike,
   FindManyArgs,
+  FindUniqueArgs,
+  IncludeArg,
   ModelDef,
   OrderByDirection,
 } from './types.js';
@@ -23,20 +26,32 @@ export abstract class ModelCollection<
   TUpdate extends Record<string, unknown>,
   TWhere,
   TOrderBy = Record<string, OrderByDirection>,
+  TInclude extends IncludeArg = IncludeArg,
 > {
   protected abstract readonly modelDef: ModelDef;
 
-  constructor(protected readonly engine: Engine) {}
+  constructor(
+    protected readonly engine: Engine,
+    /**
+     * relation include 解決用の client 参照。生成された PleasyncClient が自身を渡す。
+     * include を使わない場合は省略可（テスト等）。
+     */
+    protected readonly client?: ClientLike,
+  ) {}
 
   /** id 1 件取得（見つからなければ null） */
-  async findUnique(args: { where: { id: number } }): Promise<TRecord | null> {
+  async findUnique(args: FindUniqueArgs<TInclude>): Promise<TRecord | null> {
     try {
       const raw = await this.engine.api_().getRecord(args.where.id);
       if (raw === null || raw === undefined) return null;
-      return fromApiRecord(
+      const record = fromApiRecord(
         raw as Record<string, unknown>,
         this.modelDef,
-      ) as TRecord;
+      );
+      if (args.include) {
+        await this.resolveIncludes([record], args.include);
+      }
+      return record as TRecord;
     } catch (err) {
       // Pleasanter API は 404 を error で返す可能性あり
       if (isNotFoundError(err)) return null;
@@ -51,7 +66,9 @@ export abstract class ModelCollection<
    * 高度な演算子は後続フェーズで `getRecordsWithOptions` の ColumnFilterHash に
    * マップする実装に拡張予定。
    */
-  async findMany(args?: FindManyArgs<TWhere, TOrderBy>): Promise<TRecord[]> {
+  async findMany(
+    args?: FindManyArgs<TWhere, TOrderBy, TInclude>,
+  ): Promise<TRecord[]> {
     let raw: unknown[];
 
     const hasOptions =
@@ -70,9 +87,81 @@ export abstract class ModelCollection<
       raw = await this.engine.api_().getRecords(this.modelDef.siteId);
     }
 
-    return raw.map((r) =>
+    const records = raw.map((r) =>
       fromApiRecord(r as Record<string, unknown>, this.modelDef),
-    ) as TRecord[];
+    );
+
+    if (args?.include) {
+      await this.resolveIncludes(records, args.include);
+    }
+
+    return records as TRecord[];
+  }
+
+  /**
+   * include 句に応じて関連レコードを populate する。
+   *
+   * MVP: forward relation のみサポート（このモデルが foreign key を持つケース）。
+   * inverse relation (1:N) は将来対応。
+   *
+   * 実装は N+1 fetch（findUnique を foreign key 数回呼ぶ）。
+   * 同じ id への重複呼び出しは内部でキャッシュして 1 回にまとめる。
+   */
+  protected async resolveIncludes(
+    records: ReadonlyArray<Record<string, unknown>>,
+    include: IncludeArg,
+  ): Promise<void> {
+    if (!this.client) {
+      throw new Error(
+        "include is requested but no client reference was provided to ModelCollection. " +
+          "If you constructed this collection directly, pass `client` as the second arg.",
+      );
+    }
+
+    for (const [logical, enabled] of Object.entries(include)) {
+      if (!enabled) continue;
+
+      const fieldDef = this.modelDef.fieldMap[logical];
+      if (!fieldDef || fieldDef.type !== 'relation') {
+        throw new Error(
+          `include: '${logical}' is not a relation field on this model`,
+        );
+      }
+      const target = fieldDef.targetModel;
+      if (!target) {
+        throw new Error(
+          `relation field '${logical}' has no targetModel; check codegen output`,
+        );
+      }
+
+      const targetCollection = this.client.__resolveCollection(target);
+
+      // ユニークな foreign key id を集める
+      const idsToFetch = new Set<number>();
+      for (const r of records) {
+        const fk = r[logical];
+        if (typeof fk === 'number' && fk > 0) {
+          idsToFetch.add(fk);
+        }
+      }
+
+      // 1 回ずつ fetch して id → record の map を作る
+      const cache = new Map<number, unknown>();
+      for (const id of idsToFetch) {
+        const found = await targetCollection.findUnique({ where: { id } });
+        if (found !== null && found !== undefined) {
+          cache.set(id, found);
+        }
+      }
+
+      // 各 record に populate
+      for (const r of records) {
+        const fk = r[logical];
+        if (typeof fk === 'number' && cache.has(fk)) {
+          r[logical] = cache.get(fk);
+        }
+      }
+    }
   }
 
   /** 新規作成 → 作成された record を返す */

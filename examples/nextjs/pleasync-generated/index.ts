@@ -4,7 +4,7 @@
 /* eslint-disable */
 /* @ts-nocheck */
 import { Engine, ModelCollection } from '@pleasync/orm';
-import type { ModelDef, WhereOperator, OrderByDirection } from '@pleasync/orm';
+import type { ModelDef, WhereOperator, OrderByDirection, ClientLike } from '@pleasync/orm';
 
 // === shared choices ===
 export type ProgressStatus = 100 | 200 | 900;
@@ -45,12 +45,17 @@ export interface CustomerOrderBy {
   status?: OrderByDirection;
 }
 
+export interface CustomerInclude {
+  // (no relation fields)
+}
+
 class CustomerCollection extends ModelCollection<
   CustomerRecord,
   CustomerCreateInput,
   CustomerUpdateInput,
   CustomerWhere,
-  CustomerOrderBy
+  CustomerOrderBy,
+  CustomerInclude
 > {
   protected readonly modelDef: ModelDef = {
     type: "Results",
@@ -110,12 +115,17 @@ export interface IssueOrderBy {
   completionDate?: OrderByDirection;
 }
 
+export interface IssueInclude {
+  // (no relation fields)
+}
+
 class IssueCollection extends ModelCollection<
   IssueRecord,
   IssueCreateInput,
   IssueUpdateInput,
   IssueWhere,
-  IssueOrderBy
+  IssueOrderBy,
+  IssueInclude
 > {
   protected readonly modelDef: ModelDef = {
     type: "Issues",
@@ -139,13 +149,22 @@ export interface PleasyncClientConfig {
   apiVersion?: string;
 }
 
-export class PleasyncClient {
+export class PleasyncClient implements ClientLike {
   readonly customer: CustomerCollection;
   readonly issue: IssueCollection;
 
   private constructor(engine: Engine) {
-    this.customer = new CustomerCollection(engine);
-    this.issue = new IssueCollection(engine);
+    this.customer = new CustomerCollection(engine, this);
+    this.issue = new IssueCollection(engine, this);
+  }
+
+  /** ClientLike: relation include 解決時に ModelCollection から呼ばれる */
+  __resolveCollection(name: string) {
+    switch (name) {
+      case "customer": return this.customer as never;
+      case "issue": return this.issue as never;
+      default: throw new Error(`unknown model: ${name}`);
+    }
   }
 
   /** 設定から PleasyncClient を構築（@pleasync/client を内部 require） */
