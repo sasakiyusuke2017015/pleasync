@@ -13,6 +13,12 @@ import type { RawSite } from './introspect.js';
 export interface ApplyCommandOptions extends PlanCommandOptions {
   /** schema YAML への siteId write-back を抑止（dry-run 的用途、ただし create 自体は実行する） */
   skipSchemaWriteback?: boolean;
+  /**
+   * 破壊的操作（schema にない既存 column の削除）を許可する。
+   * デフォルト false (安全側) で orphan column は保持される。
+   * `true` で更新時に Pleasanter 側から該当 column を取り除く。
+   */
+  allowDestroy?: boolean;
   /** テスト用: PleasanterApi を直接注入。 */
   api?: PleasanterApi;
 }
@@ -59,8 +65,18 @@ export async function runApply(
     }
 
     // update
-    await applyUpdate(diff, computed.existingSites[diff.modelName], api);
-    updated.push({ modelName: diff.modelName, siteId: diff.siteId });
+    const didMutate = await applyUpdate(
+      diff,
+      computed.existingSites[diff.modelName],
+      api,
+      options.allowDestroy ?? false,
+    );
+    if (didMutate) {
+      updated.push({ modelName: diff.modelName, siteId: diff.siteId });
+    } else {
+      // orphan のみ + --allow-destroy 無し等で実質何もしないケース
+      unchanged.push({ modelName: diff.modelName, siteId: diff.siteId });
+    }
   }
 
   // schema write-back: create された siteId を YAML に書き戻す
@@ -99,11 +115,16 @@ async function applyCreate(model: Model, api: PleasanterApi): Promise<number> {
 
 // === update ===
 
+/**
+ * 更新を実行。実際に updateSite を呼んだら true を返す。
+ * orphan のみ + --allow-destroy 無し等で何もしないケースは false。
+ */
 async function applyUpdate(
   diff: ModelDiff & { kind: 'update' },
   existing: RawSite | undefined,
   api: PleasanterApi,
-): Promise<void> {
+  allowDestroy: boolean,
+): Promise<boolean> {
   const payload: Record<string, unknown> = {};
 
   // title diff
@@ -120,17 +141,22 @@ async function applyUpdate(
       c.kind === 'update-column-label' ||
       c.kind === 'update-column-choices',
   );
+  // allowDestroy が true で orphan が居る → 削除のため update に含める
+  const hasDestructiveOrphan =
+    allowDestroy &&
+    diff.changes.some((c) => c.kind === 'orphan-column');
 
-  if (hasColumnChange) {
-    const merged = mergeColumns(existing, diff);
+  if (hasColumnChange || hasDestructiveOrphan) {
+    const merged = mergeColumns(existing, diff, allowDestroy);
     payload.SiteSettings = { Columns: merged };
   }
 
   if (Object.keys(payload).length === 0) {
-    return;
+    return false;
   }
 
   await api.updateSite(diff.siteId, payload);
+  return true;
 }
 
 interface ColumnEntry {
@@ -142,7 +168,8 @@ interface ColumnEntry {
 /**
  * 既存の columns + schema 側の差分を統合した完全な Columns 配列を返す。
  *
- * - existing にあるが schema にない slot → そのまま残す（orphan、削除しない）
+ * - existing にあるが schema にない slot → デフォルトでは保持。
+ *   ただし `allowDestroy === true` のときは削除（orphan-column は除外する）
  * - schema で add-column → 追加
  * - schema で update-column-label/choices → 該当 entry を変更
  * - schema にあって existing と一致 → 何もしない
@@ -150,12 +177,22 @@ interface ColumnEntry {
 function mergeColumns(
   existing: RawSite | undefined,
   diff: ModelDiff & { kind: 'update' },
+  allowDestroy: boolean,
 ): ColumnEntry[] {
   const map = new Map<string, ColumnEntry>();
 
   for (const col of existing?.SiteSettings?.Columns ?? []) {
     if (!col.ColumnName) continue;
     map.set(col.ColumnName, { ...col, ColumnName: col.ColumnName });
+  }
+
+  // allowDestroy なら orphan-column を map から削除（apply で site から消える）
+  if (allowDestroy) {
+    for (const ch of diff.changes) {
+      if (ch.kind === 'orphan-column') {
+        map.delete(ch.slot);
+      }
+    }
   }
 
   for (const ch of diff.changes) {
@@ -280,6 +317,9 @@ Options:
   --api-key <key>          API key (or PLEASANTER_API_KEY env)
   --api-version <v>        API version (default: 1.1)
   --skip-schema-writeback  Do not auto-update siteId in schema YAML
+  --allow-destroy          Delete orphan columns (existing columns not in schema).
+                           Without this flag, orphan columns are preserved.
+                           DESTRUCTIVE: column data will be lost.
   -h, --help               Show this help
 
 Note: \`apply\` makes changes to Pleasanter. Run \`pleasync plan\` first to review.
@@ -313,6 +353,9 @@ function parseArgs(
         break;
       case '--skip-schema-writeback':
         opts.skipSchemaWriteback = true;
+        break;
+      case '--allow-destroy':
+        opts.allowDestroy = true;
         break;
       case '-h':
       case '--help':
